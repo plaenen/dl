@@ -1,0 +1,555 @@
+import { useState } from "react";
+
+const DUBAI_OFFSET = 4; // UTC+4
+const HK_OFFSET = 8; // UTC+8
+const DIFF = HK_OFFSET - DUBAI_OFFSET; // +4
+
+function toHK(dubaiTime) {
+  const [h, m] = dubaiTime.split(":").map(Number);
+  const hk = h + DIFF;
+  return `${hk}:${m.toString().padStart(2, "0")}`;
+}
+
+const SUBJECTS = {
+  maths: { label: "Maths", bg: "#3b82f6", fg: "#fff" },
+  english: { label: "English", bg: "#8b5cf6", fg: "#fff" },
+  arabic: { label: "Arabic", bg: "#f59e0b", fg: "#fff" },
+  arabicDS: { label: "Arabic A / Dir. Studies", bg: "#d97706", fg: "#fff" },
+  islamicDS: { label: "Islamic / Dir. Studies", bg: "#78716c", fg: "#fff" },
+  science: { label: "Science", bg: "#10b981", fg: "#fff" },
+  ipc: { label: "IPC", bg: "#06b6d4", fg: "#fff" },
+  computing: { label: "Computing", bg: "#6366f1", fg: "#fff" },
+  art: { label: "Art", bg: "#ec4899", fg: "#fff" },
+  pe: { label: "PE", bg: "#ef4444", fg: "#fff" },
+  swimming: { label: "Swimming", bg: "#0ea5e9", fg: "#fff" },
+  french: { label: "French", bg: "#a855f7", fg: "#fff" },
+  spelling: { label: "Spelling", bg: "#7c3aed", fg: "#fff" },
+  spag: { label: "SPAG", bg: "#9333ea", fg: "#fff" },
+  handwriting: { label: "Handwriting", bg: "#c084fc", fg: "#fff" },
+  wellbeing: { label: "Wellbeing", bg: "#14b8a6", fg: "#fff" },
+  r4p: { label: "R4P", bg: "#64748b", fg: "#fff" },
+  assembly: { label: "Assembly", bg: "#475569", fg: "#fff" },
+  wbd: { label: "World Book Day", bg: "#fbbf24", fg: "#1e293b" },
+  socialMSC: { label: "Social Studies / MSC", bg: "#f97316", fg: "#fff" },
+};
+
+const DAYS = [
+  {
+    name: "Monday",
+    short: "Mon",
+    endsDubai: "14:40",
+    slots: [
+      { start: "8:20", end: "8:40", subject: "wellbeing" },
+      { start: "8:40", end: "9:20", subject: "maths", teacher: "Mr Robinson" },
+      { start: "10:00", end: "10:20", subject: "arabicDS" },
+      {
+        start: "10:40",
+        end: "11:20",
+        subject: "english",
+        teacher: "Mr Robinson",
+      },
+      { start: "12:20", end: "12:40", subject: "swimming" },
+      { start: "13:20", end: "13:40", subject: "art" },
+      { start: "14:40", end: "14:40", subject: "spag" },
+    ],
+  },
+  {
+    name: "Tuesday",
+    short: "Tue",
+    endsDubai: "14:20",
+    slots: [
+      { start: "8:00", end: "8:20", subject: "maths", teacher: "Mr Robinson" },
+      { start: "8:40", end: "9:00", subject: "arabic" },
+      {
+        start: "10:00",
+        end: "10:20",
+        subject: "english",
+        teacher: "Mr Robinson",
+      },
+      { start: "10:40", end: "11:00", subject: "handwriting" },
+      { start: "12:20", end: "12:40", subject: "arabic" },
+      { start: "13:20", end: "13:40", subject: "ipc", teacher: "Mr Robinson" },
+      { start: "14:20", end: "14:20", subject: "spelling" },
+    ],
+  },
+  {
+    name: "Wednesday",
+    short: "Wed",
+    endsDubai: "14:20",
+    slots: [
+      { start: "8:00", end: "8:20", subject: "islamicDS" },
+      { start: "8:40", end: "8:40", subject: "computing" },
+      { start: "9:00", end: "9:00", subject: "r4p" },
+      {
+        start: "10:00",
+        end: "10:20",
+        subject: "english",
+        teacher: "Mr Robinson",
+      },
+      { start: "10:40", end: "11:00", subject: "ipc", teacher: "Mr Robinson" },
+      {
+        start: "12:20",
+        end: "12:40",
+        subject: "science",
+        teacher: "Mr Robinson",
+      },
+      {
+        start: "13:20",
+        end: "13:40",
+        subject: "maths",
+        teacher: "Mr Robinson",
+      },
+      { start: "14:20", end: "14:20", subject: "french" },
+    ],
+  },
+  {
+    name: "Thursday",
+    short: "Thu",
+    endsDubai: "14:40",
+    slots: [
+      { start: "8:00", end: "8:00", subject: "assembly" },
+      { start: "8:20", end: "9:00", subject: "wbd", teacher: "Mr Robinson" },
+      { start: "10:00", end: "10:20", subject: "pe" },
+      { start: "10:40", end: "11:20", subject: "wbd", teacher: "Mr Tabner" },
+      { start: "12:20", end: "12:40", subject: "wbd", note: "Seesaw" },
+      { start: "13:00", end: "13:40", subject: "arabicDS" },
+      { start: "14:00", end: "14:40", subject: "wbd", teacher: "Mrs Brannon" },
+    ],
+  },
+  {
+    name: "Friday",
+    short: "Fri",
+    endsDubai: "11:15",
+    note: "Early finish",
+    slots: [
+      { start: "7:50", end: "8:10", subject: "socialMSC" },
+      { start: "8:25", end: "8:40", subject: "islamicDS" },
+      { start: "9:10", end: "9:25", subject: "maths", teacher: "Mr Robinson" },
+      { start: "10:00", end: "10:30", subject: "english", teacher: "Mr Kay" },
+    ],
+  },
+];
+
+const BREAK_DUBAI = { start: "9:20", end: "10:00", label: "Break" };
+const LUNCH_DUBAI = { start: "11:20", end: "12:20", label: "Lunch" };
+
+export default function Timetable() {
+  const [tz, setTz] = useState("both"); // "dubai", "hk", "both"
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  const fmt = (dubaiTime) => {
+    if (tz === "dubai") return dubaiTime;
+    if (tz === "hk") return toHK(dubaiTime);
+    return `${dubaiTime} / ${toHK(dubaiTime)}`;
+  };
+
+  const fmtShort = (dubaiTime) => {
+    if (tz === "dubai") return dubaiTime;
+    if (tz === "hk") return toHK(dubaiTime);
+    return dubaiTime;
+  };
+
+  const days = selectedDay !== null ? [DAYS[selectedDay]] : DAYS;
+
+  return (
+    <div
+      style={{
+        fontFamily: "'DM Sans', 'Avenir', sans-serif",
+        background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+        minHeight: "100vh",
+        padding: "20px 16px",
+        color: "#1e293b",
+      }}
+    >
+      <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+
+      {/* Header */}
+      <div style={{ maxWidth: 600, margin: "0 auto 16px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 4,
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            BC
+          </div>
+          <div>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: 18,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              4R Timetable
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>
+              Brighton College Dubai
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timezone toggle */}
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "0 auto 14px",
+          display: "flex",
+          gap: 6,
+        }}
+      >
+        {[
+          { key: "both", label: "Dubai + HK" },
+          { key: "dubai", label: "Dubai (UTC+4)" },
+          { key: "hk", label: "Hong Kong (UTC+8)" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTz(t.key)}
+            style={{
+              flex: 1,
+              padding: "8px 4px",
+              borderRadius: 8,
+              border: "none",
+              background: tz === t.key ? "#1e3a5f" : "#fff",
+              color: tz === t.key ? "#fff" : "#64748b",
+              fontWeight: tz === t.key ? 600 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              boxShadow:
+                tz === t.key
+                  ? "0 2px 8px rgba(30,58,95,0.3)"
+                  : "0 1px 3px rgba(0,0,0,0.08)",
+              transition: "all 0.2s",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Day selector */}
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "0 auto 16px",
+          display: "flex",
+          gap: 6,
+        }}
+      >
+        <button
+          onClick={() => setSelectedDay(null)}
+          style={{
+            padding: "7px 12px",
+            borderRadius: 8,
+            border: "none",
+            background: selectedDay === null ? "#2563eb" : "#fff",
+            color: selectedDay === null ? "#fff" : "#64748b",
+            fontWeight: 600,
+            fontSize: 12,
+            cursor: "pointer",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          }}
+        >
+          All
+        </button>
+        {DAYS.map((d, i) => (
+          <button
+            key={d.name}
+            onClick={() => setSelectedDay(i)}
+            style={{
+              flex: 1,
+              padding: "7px 4px",
+              borderRadius: 8,
+              border: "none",
+              background: selectedDay === i ? "#2563eb" : "#fff",
+              color: selectedDay === i ? "#fff" : "#64748b",
+              fontWeight: selectedDay === i ? 600 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
+            {d.short}
+          </button>
+        ))}
+      </div>
+
+      {/* Schedule */}
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        {days.map((day) => (
+          <div
+            key={day.name}
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              boxShadow: "0 1px 8px rgba(0,0,0,0.06)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Day header */}
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "linear-gradient(135deg, #1e3a5f 0%, #334155 100%)",
+                color: "#fff",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{day.name}</span>
+              <span style={{ fontSize: 12, opacity: 0.8 }}>
+                Ends {fmt(day.endsDubai)}
+                {day.note ? ` · ${day.note}` : ""}
+              </span>
+            </div>
+
+            {/* Slots */}
+            <div style={{ padding: "8px 12px 12px" }}>
+              {day.slots.map((slot, si) => {
+                const sub = SUBJECTS[slot.subject];
+                const isAfterBreak =
+                  si > 0 &&
+                  (() => {
+                    const prev = day.slots[si - 1];
+                    const prevEnd = prev.end || prev.start;
+                    return (
+                      prevEnd <= BREAK_DUBAI.start &&
+                      slot.start >= BREAK_DUBAI.end
+                    );
+                  })();
+                const isAfterLunch =
+                  si > 0 &&
+                  (() => {
+                    const prev = day.slots[si - 1];
+                    const prevEnd = prev.end || prev.start;
+                    return (
+                      prevEnd <= LUNCH_DUBAI.start &&
+                      slot.start >= LUNCH_DUBAI.end
+                    );
+                  })();
+
+                return (
+                  <div key={si}>
+                    {isAfterBreak && (
+                      <div
+                        style={{
+                          padding: "6px 0",
+                          margin: "4px 0",
+                          textAlign: "center",
+                          fontSize: 11,
+                          color: "#94a3b8",
+                          borderTop: "1px dashed #e2e8f0",
+                          borderBottom: "1px dashed #e2e8f0",
+                          fontWeight: 500,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        ☕ BREAK · {fmt(BREAK_DUBAI.start)}–
+                        {fmt(BREAK_DUBAI.end)}
+                      </div>
+                    )}
+                    {isAfterLunch && (
+                      <div
+                        style={{
+                          padding: "6px 0",
+                          margin: "4px 0",
+                          textAlign: "center",
+                          fontSize: 11,
+                          color: "#94a3b8",
+                          borderTop: "1px dashed #e2e8f0",
+                          borderBottom: "1px dashed #e2e8f0",
+                          fontWeight: 500,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        🍽 LUNCH · {fmt(LUNCH_DUBAI.start)}–
+                        {fmt(LUNCH_DUBAI.end)}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "8px 8px",
+                        borderRadius: 10,
+                        marginTop: 4,
+                        background: `${sub.bg}0D`,
+                      }}
+                    >
+                      {/* Time column */}
+                      <div
+                        style={{
+                          minWidth: tz === "both" ? 90 : 55,
+                          textAlign: "right",
+                          fontSize: 11,
+                          color: "#64748b",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {tz === "both" ? (
+                          <>
+                            <div style={{ fontWeight: 600, color: "#475569" }}>
+                              {slot.start}
+                              {slot.end !== slot.start ? `–${slot.end}` : ""}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#2563eb" }}>
+                              {toHK(slot.start)}
+                              {slot.end !== slot.start
+                                ? `–${toHK(slot.end)}`
+                                : ""}{" "}
+                              HK
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ fontWeight: 600, color: "#475569" }}>
+                            {fmtShort(slot.start)}
+                            {slot.end !== slot.start
+                              ? `–${fmtShort(slot.end)}`
+                              : ""}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Color dot */}
+                      <div
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: sub.bg,
+                          flexShrink: 0,
+                        }}
+                      />
+
+                      {/* Subject info */}
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 13,
+                            color: "#1e293b",
+                          }}
+                        >
+                          {sub.label}
+                        </div>
+                        {(slot.teacher || slot.note) && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#94a3b8",
+                              marginTop: 1,
+                            }}
+                          >
+                            {slot.teacher}
+                            {slot.note ? ` · ${slot.note}` : ""}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "20px auto 0",
+          background: "#fff",
+          borderRadius: 14,
+          padding: 16,
+          boxShadow: "0 1px 8px rgba(0,0,0,0.06)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#64748b",
+            marginBottom: 10,
+          }}
+        >
+          Subjects
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {Object.entries(SUBJECTS)
+            .filter(([key]) =>
+              DAYS.some((d) => d.slots.some((s) => s.subject === key)),
+            )
+            .map(([key, sub]) => (
+              <span
+                key={key}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  background: `${sub.bg}15`,
+                  fontSize: 11,
+                  color: sub.bg,
+                  fontWeight: 500,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: sub.bg,
+                  }}
+                />
+                {sub.label}
+              </span>
+            ))}
+        </div>
+      </div>
+
+      <div
+        style={{
+          textAlign: "center",
+          marginTop: 16,
+          fontSize: 11,
+          color: "#94a3b8",
+        }}
+      >
+        Dubai (UTC+4) → Hong Kong (UTC+8) = +4 hours
+      </div>
+    </div>
+  );
+}
