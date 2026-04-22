@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spelling Adventure!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.08)} }
+    @keyframes slideUp { from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1} }
+    @keyframes rainbow { 0%{color:#ef4444}16%{color:#f97316}33%{color:#eab308}50%{color:#22c55e}66%{color:#3b82f6}83%{color:#8b5cf6}100%{color:#ef4444} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes glow { 0%,100%{box-shadow:0 0 8px rgba(251,191,36,0.3)}50%{box-shadow:0 0 20px rgba(251,191,36,0.6)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .slide-up{animation:slideUp .4s ease-out} .rainbow{animation:rainbow 3s linear infinite}
+    .fade-slide{animation:fadeSlide .4s ease-out both}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+    input[type="text"] {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 20px; font-weight: 700; text-align: center;
+      padding: 14px 20px; border-radius: 14px; border: 3px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.15); color: #fff; outline: none;
+      width: 100%; transition: border-color 0.2s;
+    }
+    input[type="text"]::placeholder { color: rgba(255,255,255,0.4); }
+    input[type="text"]:focus { border-color: rgba(255,255,255,0.6); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ─── WORD DATA ──────────────────────────────────────────────────
+    const SPELLING_WORDS = [
+      { word: "accident", hint: "Something bad that happens by chance", example: "The car had a small accident." },
+      { word: "actually", hint: "Really; in fact", example: "I actually like broccoli!" },
+      { word: "address", hint: "Where someone lives", example: "What is your home address?" },
+      { word: "answer", hint: "A reply to a question", example: "Do you know the answer?" },
+      { word: "appear", hint: "To come into sight", example: "Stars appear at night." },
+      { word: "arrive", hint: "To reach a place", example: "We will arrive at school soon." },
+      { word: "believe", hint: "To think something is true", example: "I believe you can do it!" },
+      { word: "bicycle", hint: "A two-wheeled vehicle you pedal", example: "She rides her bicycle to school." },
+      { word: "breath", hint: "Air taken into the lungs (noun)", example: "Take a deep breath." },
+      { word: "breathe", hint: "To take air in and out (verb)", example: "Breathe slowly and calmly." },
+      { word: "build", hint: "To make something by putting parts together", example: "Let's build a sandcastle." },
+      { word: "busy", hint: "Having a lot to do", example: "Mum is very busy today." },
+      { word: "business", hint: "A company or being busy with work", example: "Dad has his own business." },
+      { word: "calendar", hint: "Shows the days, weeks, and months", example: "Check the calendar for the date." },
+      { word: "caught", hint: "Past tense of catch", example: "She caught the ball." },
+      { word: "centre", hint: "The middle of something", example: "The shop is in the town centre." },
+      { word: "century", hint: "100 years", example: "A century is a very long time." },
+      { word: "certain", hint: "Sure about something", example: "I am certain that is right." },
+      { word: "circle", hint: "A round shape", example: "Draw a circle on the paper." },
+      { word: "complete", hint: "To finish something", example: "Please complete your homework." },
+      { word: "consider", hint: "To think carefully about", example: "Consider all the options." },
+      { word: "continue", hint: "To keep going", example: "Continue reading your book." },
+      { word: "decide", hint: "To make a choice", example: "I can't decide which flavour!" },
+      { word: "describe", hint: "To tell what something is like", example: "Describe your favourite animal." },
+      { word: "different", hint: "Not the same", example: "We are all different." },
+      { word: "difficult", hint: "Not easy; hard", example: "The test was difficult." },
+      { word: "disappear", hint: "To go out of sight", example: "The rabbit seemed to disappear!" },
+      { word: "early", hint: "Before the expected time", example: "We arrived early for class." },
+      { word: "earth", hint: "The planet we live on", example: "The Earth goes around the Sun." },
+      { word: "eight", hint: "The number 8", example: "I have eight crayons." },
+      { word: "enough", hint: "As much as needed", example: "Have you had enough to eat?" },
+      { word: "exercise", hint: "Physical activity to stay fit", example: "Exercise keeps you healthy." },
+      { word: "experience", hint: "Something that happens to you", example: "It was an amazing experience." },
+      { word: "experiment", hint: "A test to find out something", example: "We did a science experiment." },
+      { word: "extreme", hint: "Very great or intense", example: "The heat was extreme today." },
+      { word: "famous", hint: "Known by many people", example: "She is a famous singer." },
+      { word: "favourite", hint: "The one you like the most", example: "What is your favourite colour?" },
+      { word: "February", hint: "The second month of the year", example: "Valentine's Day is in February." },
+      { word: "forward", hint: "Towards the front", example: "Take a step forward." },
+      { word: "fruit", hint: "Food like apples, oranges, bananas", example: "Eat plenty of fruit." },
+      { word: "grammar", hint: "The rules of a language", example: "Good grammar helps your writing." },
+      { word: "group", hint: "A number of people or things together", example: "Work in a group of four." },
+      { word: "guard", hint: "A person who protects something", example: "The guard stood by the door." },
+      { word: "guide", hint: "Someone who shows the way", example: "The guide led us through the museum." },
+      { word: "heard", hint: "Past tense of hear", example: "I heard a loud noise." },
+      { word: "heart", hint: "The organ that pumps blood", example: "My heart beats fast when I run." },
+      { word: "height", hint: "How tall something is", example: "What is your height?" },
+      { word: "history", hint: "The study of past events", example: "We learn about history at school." },
+      { word: "imagine", hint: "To make a picture in your mind", example: "Imagine you could fly!" },
+      { word: "important", hint: "Something that matters a lot", example: "Breakfast is an important meal." },
+      { word: "increase", hint: "To become bigger or more", example: "The temperature will increase." },
+      { word: "interest", hint: "Wanting to know more about something", example: "She has an interest in space." },
+      { word: "island", hint: "Land surrounded by water", example: "We visited a tropical island." },
+      { word: "knowledge", hint: "Things you know and understand", example: "Reading builds your knowledge." },
+      { word: "learn", hint: "To gain knowledge or a skill", example: "We learn something new every day." },
+      { word: "length", hint: "How long something is", example: "Measure the length of the table." },
+      { word: "library", hint: "A place full of books", example: "I borrowed a book from the library." },
+      { word: "material", hint: "What something is made of", example: "Cotton is a soft material." },
+      { word: "medicine", hint: "Something that helps you get better", example: "Take your medicine to feel better." },
+      { word: "mention", hint: "To talk about briefly", example: "Did she mention the party?" },
+      { word: "minute", hint: "60 seconds", example: "Wait just one minute." },
+      { word: "natural", hint: "Found in nature, not man-made", example: "The park has natural beauty." },
+      { word: "naughty", hint: "Badly behaved", example: "The naughty puppy chewed the shoe!" },
+      { word: "notice", hint: "To become aware of something", example: "Did you notice the rainbow?" },
+      { word: "occasion", hint: "A special event or time", example: "A birthday is a happy occasion." },
+      { word: "occasionally", hint: "Sometimes, but not often", example: "We occasionally go to the beach." },
+      { word: "often", hint: "Many times; frequently", example: "I often read before bed." },
+      { word: "opposite", hint: "Completely different", example: "Hot is the opposite of cold." },
+      { word: "ordinary", hint: "Normal, nothing special", example: "It was just an ordinary day." },
+      { word: "particular", hint: "Specific, one certain thing", example: "Is there a particular book you want?" },
+      { word: "peculiar", hint: "Strange or unusual", example: "What a peculiar noise!" },
+      { word: "perhaps", hint: "Maybe, possibly", example: "Perhaps we can go tomorrow." },
+      { word: "popular", hint: "Liked by many people", example: "That game is very popular." },
+      { word: "position", hint: "Where something is placed", example: "What position do you play?" },
+      { word: "possess", hint: "To own or have", example: "She possesses great talent." },
+      { word: "possible", hint: "Can be done", example: "Anything is possible!" },
+      { word: "potatoes", hint: "A root vegetable (plural)", example: "We had mashed potatoes for dinner." },
+      { word: "pressure", hint: "Force pushing against something", example: "Don't put pressure on yourself." },
+      { word: "probably", hint: "Most likely", example: "It will probably rain tomorrow." },
+      { word: "promise", hint: "A commitment to do something", example: "I promise to be kind." },
+      { word: "purpose", hint: "The reason for something", example: "What is the purpose of this?" },
+      { word: "quarter", hint: "One fourth (1/4)", example: "A quarter of an hour is 15 minutes." },
+      { word: "question", hint: "Something you ask", example: "Can I ask you a question?" },
+      { word: "recent", hint: "Happening not long ago", example: "I saw a recent film." },
+      { word: "regular", hint: "Happening at the same time or way", example: "We have regular PE lessons." },
+      { word: "reign", hint: "When a king or queen rules", example: "The queen's reign lasted many years." },
+      { word: "remember", hint: "To keep in your memory", example: "Remember to bring your lunch!" },
+      { word: "sentence", hint: "A group of words that makes sense", example: "Write a sentence about your pet." },
+      { word: "separate", hint: "To divide or keep apart", example: "Separate the colours from the whites." },
+      { word: "special", hint: "Better or different from usual", example: "Today is a special day." },
+      { word: "straight", hint: "Not curved or bent", example: "Draw a straight line." },
+      { word: "strange", hint: "Unusual or surprising", example: "That was a strange dream." },
+      { word: "strength", hint: "How strong something is", example: "She has great strength." },
+      { word: "suppose", hint: "To think or assume", example: "I suppose you are right." },
+      { word: "surprise", hint: "Something unexpected", example: "What a lovely surprise!" },
+      { word: "therefore", hint: "For that reason", example: "It was raining, therefore we stayed in." },
+      { word: "though", hint: "However, but", example: "It's small, though very cute." },
+      { word: "thought", hint: "Past tense of think", example: "I thought about you." },
+      { word: "through", hint: "Going in one side and out the other", example: "Walk through the door." },
+      { word: "various", hint: "Several different types", example: "There are various flavours." },
+      { word: "weight", hint: "How heavy something is", example: "What is the weight of the bag?" },
+      { word: "woman", hint: "An adult female (singular)", example: "The woman smiled kindly." },
+      { word: "women", hint: "Adult females (plural)", example: "The women cheered loudly." },
+    ];
+
+    const TRICKY_WORDS = [
+      { word: "necessary", trick: "1 collar (c) and 2 socks (ss) are necessary" },
+      { word: "because", trick: "Big Elephants Can Always Understand Small Elephants" },
+      { word: "beautiful", trick: "Big Elephants Are Ugly - but remember the T-I-FUL!" },
+      { word: "separate", trick: "There's A RAT in separate!" },
+      { word: "different", trick: "DIFFER + ENT - two f's make the difference!" },
+      { word: "believe", trick: "Never beLIEve a LIE!" },
+      { word: "occasion", trick: "Two c's but only one s - OCC-A-SION" },
+      { word: "occasionally", trick: "Occasion + ally. Two c's, one s, then -ally!" },
+      { word: "business", trick: "Take the BUS to your busINESS" },
+      { word: "February", trick: "Feb-RU-ary - don't forget the R!" },
+      { word: "Wednesday", trick: "WED-NES-DAY - we say it differently to how we spell it!" },
+      { word: "library", trick: "LIB-RA-RY - two r's! It's not lib-ary!" },
+      { word: "surprise", trick: "There's always a SUR at the start - SUR-PRISE!" },
+      { word: "disappear", trick: "DIS + APPEAR - the word appear is hiding inside!" },
+      { word: "favourite", trick: "FAVOUR + ITE - do me a favour and spell it right!" },
+      { word: "knowledge", trick: "KNOW + LEDGE - stand on the ledge of what you know!" },
+      { word: "straight", trick: "STR + EIGHT - the number 8 is inside!" },
+      { word: "thought", trick: "THOUGH + T - just add a T to though!" },
+      { word: "through", trick: "THR + OUGH - three letters then OUGH!" },
+      { word: "enough", trick: "EN + OUGH - starts with EN then the OUGH pattern!" },
+      { word: "caught", trick: "C + AUGHT - like taught but with a C!" },
+      { word: "naughty", trick: "NAUGHT + Y - zero (naught) plus Y!" },
+      { word: "height", trick: "H + EIGHT - the number 8 again!" },
+      { word: "weight", trick: "W + EIGHT - weigh has eight in it!" },
+      { word: "calendar", trick: "CAL-EN-DAR - it ends with DAR not DER!" },
+      { word: "grammar", trick: "GRAM + MAR - ends with MAR not MER!" },
+      { word: "particular", trick: "PART-I-CUL-AR - there's a PART at the start!" },
+      { word: "peculiar", trick: "PEC-UL-I-AR - it's a peculiar spelling!" },
+      { word: "exercise", trick: "EX-ER-CISE - X marks the spot for exercise!" },
+      { word: "medicine", trick: "MED-I-CINE - a MED helps with medicine!" },
+      { word: "sentence", trick: "SENT-ENCE - you SENT a sentence!" },
+      { word: "experience", trick: "EX-PER-I-ENCE - an EXPERT has experience!" },
+      { word: "strength", trick: "STRENG-TH - it's STRONG with TH at the end!" },
+      { word: "address", trick: "ADD + RESS - ADD the address! Double D, double S!" },
+      { word: "accident", trick: "ACCI-DENT - you might dent your car in an accident!" },
+      { word: "probably", trick: "PROB-AB-LY - it's PROBably right!" },
+      { word: "possess", trick: "POSS-ESS - it possesses lots of S's!" },
+      { word: "promise", trick: "PRO-MISE - Miss Promise is a pro!" },
+      { word: "purpose", trick: "PUR-POSE - strike a pose with purpose!" },
+      { word: "quarter", trick: "QU-ART-ER - there's ART in a quarter!" },
+      { word: "island", trick: "IS-LAND - an island IS LAND surrounded by water! Silent S!" },
+      { word: "guard", trick: "GU-ARD - U always guards the G!" },
+      { word: "guide", trick: "GU-IDE - the U is hiding inside!" },
+      { word: "reign", trick: "RE-IGN - a king reigns and IGNORES the silent G!" },
+      { word: "potatoes", trick: "POTATO + ES - don't forget the E before the S!" },
+      { word: "women", trick: "WO-MEN - one woMAN, many woMEN - the O sounds like I!" },
+      { word: "answer", trick: "AN-SWER - the W is silent! You swear an answer!" },
+      { word: "breath", trick: "No E = noun (a breath). With E = verb (to breathe)!" },
+      { word: "bicycle", trick: "BI-CY-CLE - BI means two (two wheels)!" },
+      { word: "pressure", trick: "PRESS-URE - you PRESS with pressure! Double S!" },
+    ];
+
+    const HOMOPHONES = [
+      {
+        words: ["their", "there", "they're"],
+        meanings: { "their": "belonging to them", "there": "a place or position", "they're": "short for they are" },
+        sentences: [
+          { sentence: "The children put ___ bags on the table.", answer: "their", explain: "'Their' means belonging to them - it's the children's bags." },
+          { sentence: "Look over ___! I can see a rainbow!", answer: "there", explain: "'There' points to a place - where the rainbow is." },
+          { sentence: "___ going to the park after lunch.", answer: "they're", explain: "'They're' is short for 'they are' - they are going to the park." },
+          { sentence: "Is ___ a swimming pool near here?", answer: "there", explain: "'There' is used to say something exists in a place." },
+          { sentence: "The dogs wagged ___ tails happily.", answer: "their", explain: "'Their' shows the tails belong to the dogs." },
+          { sentence: "___ the best team in the school!", answer: "they're", explain: "'They're' = 'they are' the best team." },
+          { sentence: "We went ___ for our holiday last year.", answer: "there", explain: "'There' means to that place." },
+          { sentence: "___ always so kind to everyone.", answer: "they're", explain: "'They're' = 'they are' always kind." },
+        ],
+      },
+      {
+        words: ["to", "too", "two"],
+        meanings: { "to": "direction or part of a verb", "too": "also, or more than enough", "two": "the number 2" },
+        sentences: [
+          { sentence: "I want ___ go to the cinema.", answer: "to", explain: "'To' is part of the verb 'to go'." },
+          { sentence: "Can I come ___?", answer: "too", explain: "'Too' means 'also' - can I also come?" },
+          { sentence: "I have ___ brothers and one sister.", answer: "two", explain: "'Two' is the number 2." },
+          { sentence: "This soup is ___ hot to eat!", answer: "too", explain: "'Too' means 'more than enough' - excessively hot." },
+          { sentence: "We walked ___ the shop to buy milk.", answer: "to", explain: "'To' shows the direction - towards the shop." },
+          { sentence: "She scored ___ goals in the match.", answer: "two", explain: "'Two' is the number 2 - she scored 2 goals." },
+          { sentence: "I like football and I like tennis ___.", answer: "too", explain: "'Too' means 'also' here." },
+        ],
+      },
+      {
+        words: ["your", "you're"],
+        meanings: { "your": "belonging to you", "you're": "short for you are" },
+        sentences: [
+          { sentence: "___ the best friend anyone could have!", answer: "you're", explain: "'You're' = 'you are' the best friend." },
+          { sentence: "Is this ___ pencil case?", answer: "your", explain: "'Your' means belonging to you - your pencil case." },
+          { sentence: "___ going to love this present!", answer: "you're", explain: "'You're' = 'you are' going to love it." },
+          { sentence: "Don't forget ___ lunchbox!", answer: "your", explain: "'Your' means belonging to you." },
+          { sentence: "I think ___ really good at drawing.", answer: "you're", explain: "'You're' = 'you are' good at drawing." },
+          { sentence: "What is ___ favourite subject?", answer: "your", explain: "'Your' means belonging to you." },
+        ],
+      },
+      {
+        words: ["its", "it's"],
+        meanings: { "its": "belonging to it", "it's": "short for it is or it has" },
+        sentences: [
+          { sentence: "___ a beautiful sunny day today!", answer: "it's", explain: "'It's' = 'it is' a beautiful day." },
+          { sentence: "The cat licked ___ paws.", answer: "its", explain: "'Its' means belonging to it - the cat's paws." },
+          { sentence: "___ been raining all morning.", answer: "it's", explain: "'It's' = 'it has' been raining." },
+          { sentence: "The tree lost ___ leaves in autumn.", answer: "its", explain: "'Its' means belonging to it - the tree's leaves." },
+          { sentence: "I think ___ time to go home.", answer: "it's", explain: "'It's' = 'it is' time to go." },
+          { sentence: "The dog chased ___ tail around and around.", answer: "its", explain: "'Its' shows the tail belongs to the dog." },
+        ],
+      },
+      {
+        words: ["hear", "here"],
+        meanings: { "hear": "to listen with your ears", "here": "in this place" },
+        sentences: [
+          { sentence: "Come ___ and sit next to me.", answer: "here", explain: "'Here' means in this place - come to this spot." },
+          { sentence: "Can you ___ the birds singing?", answer: "hear", explain: "'Hear' means to listen with your ears." },
+          { sentence: "I can't ___ what you are saying!", answer: "hear", explain: "'Hear' = to pick up sound with your ears." },
+          { sentence: "The treasure is buried right ___!", answer: "here", explain: "'Here' means in this exact place." },
+        ],
+      },
+      {
+        words: ["where", "wear", "were"],
+        meanings: { "where": "in which place", "wear": "to put on clothing", "were": "past tense of are" },
+        sentences: [
+          { sentence: "___ did you put my shoes?", answer: "where", explain: "'Where' asks about a place." },
+          { sentence: "You should ___ a hat in the sun.", answer: "wear", explain: "'Wear' means to put on clothing." },
+          { sentence: "They ___ playing in the garden.", answer: "were", explain: "'Were' is the past tense of 'are'." },
+          { sentence: "___ is the nearest library?", answer: "where", explain: "'Where' asks about a location." },
+          { sentence: "We ___ so happy to see you!", answer: "were", explain: "'Were' is past tense - we were happy." },
+          { sentence: "What will you ___ to the party?", answer: "wear", explain: "'Wear' = to put on clothes." },
+        ],
+      },
+      {
+        words: ["which", "witch"],
+        meanings: { "which": "asking about a choice", "witch": "a person who uses magic" },
+        sentences: [
+          { sentence: "___ colour do you prefer?", answer: "which", explain: "'Which' asks about a choice between things." },
+          { sentence: "The ___ flew across the night sky on her broom.", answer: "witch", explain: "'Witch' is a magical person." },
+          { sentence: "___ one is yours?", answer: "which", explain: "'Which' asks you to pick one." },
+          { sentence: "The wicked ___ cast a spell on the princess.", answer: "witch", explain: "'Witch' = a person who does magic." },
+        ],
+      },
+      {
+        words: ["knew", "new"],
+        meanings: { "knew": "past tense of know", "new": "not old, recently made" },
+        sentences: [
+          { sentence: "I ___ the answer straight away!", answer: "knew", explain: "'Knew' is the past of 'know' - I already knew it." },
+          { sentence: "She got a ___ bicycle for her birthday.", answer: "new", explain: "'New' means not old - a brand new bike." },
+          { sentence: "Nobody ___ where the treasure was hidden.", answer: "knew", explain: "'Knew' = past of know - nobody had the knowledge." },
+          { sentence: "There is a ___ student in our class.", answer: "new", explain: "'New' means someone who just arrived." },
+        ],
+      },
+      {
+        words: ["know", "no"],
+        meanings: { "know": "to understand or be aware of", "no": "the opposite of yes" },
+        sentences: [
+          { sentence: "Do you ___ the way to the station?", answer: "know", explain: "'Know' means to understand or have the information." },
+          { sentence: "There are ___ biscuits left!", answer: "no", explain: "'No' means none - zero biscuits." },
+          { sentence: "I ___ how to ride a bicycle.", answer: "know", explain: "'Know' = to have the skill or knowledge." },
+          { sentence: "___, you may not have pudding before dinner.", answer: "no", explain: "'No' is the opposite of yes." },
+        ],
+      },
+      {
+        words: ["write", "right"],
+        meanings: { "write": "to put words on paper", "right": "correct, or the opposite of left" },
+        sentences: [
+          { sentence: "Please ___ your name at the top.", answer: "write", explain: "'Write' means to put words down with a pen." },
+          { sentence: "Turn ___ at the traffic lights.", answer: "right", explain: "'Right' is the direction opposite of left." },
+          { sentence: "Is that the ___ answer?", answer: "right", explain: "'Right' means correct." },
+          { sentence: "I want to ___ a story about dragons.", answer: "write", explain: "'Write' = to create words on paper." },
+        ],
+      },
+      {
+        words: ["peace", "piece"],
+        meanings: { "peace": "calm and quiet, no fighting", "piece": "a part of something" },
+        sentences: [
+          { sentence: "Can I have a ___ of cake, please?", answer: "piece", explain: "'Piece' is a part of something - a slice of cake." },
+          { sentence: "The whole world hopes for ___.", answer: "peace", explain: "'Peace' means calm, no war or fighting." },
+          { sentence: "She ate the last ___ of pizza.", answer: "piece", explain: "'Piece' = a portion, a part." },
+          { sentence: "I need some ___ and quiet to read.", answer: "peace", explain: "'Peace' = calm and quiet." },
+        ],
+      },
+      {
+        words: ["sea", "see"],
+        meanings: { "sea": "a large body of salt water", "see": "to look at with your eyes" },
+        sentences: [
+          { sentence: "Can you ___ the stars tonight?", answer: "see", explain: "'See' means to look at with your eyes." },
+          { sentence: "We went swimming in the ___.", answer: "sea", explain: "'Sea' is the ocean, salt water." },
+          { sentence: "I can ___ a ship on the horizon!", answer: "see", explain: "'See' = to look at and notice." },
+          { sentence: "The ___ was calm and blue today.", answer: "sea", explain: "'Sea' is the body of water." },
+        ],
+      },
+      {
+        words: ["sun", "son"],
+        meanings: { "sun": "the star in the sky", "son": "a male child" },
+        sentences: [
+          { sentence: "The ___ is shining brightly today.", answer: "sun", explain: "'Sun' is the star that gives us light and warmth." },
+          { sentence: "He is the ___ of the king.", answer: "son", explain: "'Son' means a male child." },
+          { sentence: "Don't look directly at the ___!", answer: "sun", explain: "'Sun' = the star in our sky." },
+          { sentence: "Their ___ is very good at football.", answer: "son", explain: "'Son' = their male child." },
+        ],
+      },
+      {
+        words: ["won", "one"],
+        meanings: { "won": "past tense of win", "one": "the number 1" },
+        sentences: [
+          { sentence: "We ___ the football match 3-1!", answer: "won", explain: "'Won' is the past of 'win' - we were victorious!" },
+          { sentence: "There is only ___ slice of cake left.", answer: "one", explain: "'One' is the number 1." },
+          { sentence: "She ___ first prize in the art competition.", answer: "won", explain: "'Won' = past tense of win." },
+          { sentence: "Pick ___ game to play.", answer: "one", explain: "'One' means a single thing." },
+        ],
+      },
+      {
+        words: ["break", "brake"],
+        meanings: { "break": "to snap or damage", "brake": "to slow down or stop a vehicle" },
+        sentences: [
+          { sentence: "Be careful not to ___ the vase!", answer: "break", explain: "'Break' means to snap or damage something." },
+          { sentence: "Press the ___ to stop the car.", answer: "brake", explain: "'Brake' is what stops a vehicle." },
+          { sentence: "Did you ___ your pencil?", answer: "break", explain: "'Break' = to snap something." },
+          { sentence: "The cyclist pulled the ___ going downhill.", answer: "brake", explain: "'Brake' = the device that slows you down." },
+        ],
+      },
+      {
+        words: ["weather", "whether"],
+        meanings: { "weather": "rain, sun, wind etc.", "whether": "if (used when choosing)" },
+        sentences: [
+          { sentence: "What's the ___ like today?", answer: "weather", explain: "'Weather' = conditions like rain, sun, wind." },
+          { sentence: "I don't know ___ to wear a coat or not.", answer: "whether", explain: "'Whether' means 'if' - choosing between options." },
+          { sentence: "The ___ forecast says it will snow!", answer: "weather", explain: "'Weather' = climate conditions." },
+          { sentence: "Ask ___ she wants to come with us.", answer: "whether", explain: "'Whether' = if - ask if she wants to come." },
+        ],
+      },
+    ];
+
+    const WORD_BUILDER_DATA = [
+      // Prefix: un-
+      { root: "happy", affix: "un-", type: "prefix", result: "unhappy", rule: "Just add un- to the front!", ruleType: "simple" },
+      { root: "kind", affix: "un-", type: "prefix", result: "unkind", rule: "Just add un- to the front!", ruleType: "simple" },
+      { root: "lucky", affix: "un-", type: "prefix", result: "unlucky", rule: "Just add un- to the front!", ruleType: "simple" },
+      { root: "fair", affix: "un-", type: "prefix", result: "unfair", rule: "Just add un- to the front!", ruleType: "simple" },
+      { root: "tidy", affix: "un-", type: "prefix", result: "untidy", rule: "Just add un- to the front!", ruleType: "simple" },
+      // Prefix: re-
+      { root: "play", affix: "re-", type: "prefix", result: "replay", rule: "Re- means again. Just add it!", ruleType: "simple" },
+      { root: "build", affix: "re-", type: "prefix", result: "rebuild", rule: "Re- means again!", ruleType: "simple" },
+      { root: "write", affix: "re-", type: "prefix", result: "rewrite", rule: "Re- means to do it again!", ruleType: "simple" },
+      { root: "read", affix: "re-", type: "prefix", result: "reread", rule: "Re- means again!", ruleType: "simple" },
+      // Prefix: dis-
+      { root: "agree", affix: "dis-", type: "prefix", result: "disagree", rule: "Dis- means not or opposite!", ruleType: "simple" },
+      { root: "appear", affix: "dis-", type: "prefix", result: "disappear", rule: "Dis- means the opposite! Appear becomes disappear.", ruleType: "simple" },
+      { root: "like", affix: "dis-", type: "prefix", result: "dislike", rule: "Dis- turns it into the opposite!", ruleType: "simple" },
+      { root: "obey", affix: "dis-", type: "prefix", result: "disobey", rule: "Dis- means not!", ruleType: "simple" },
+      // Prefix: mis-
+      { root: "spell", affix: "mis-", type: "prefix", result: "misspell", rule: "Mis- means wrongly. Keep both s's: mis + spell!", ruleType: "simple" },
+      { root: "behave", affix: "mis-", type: "prefix", result: "misbehave", rule: "Mis- means wrongly or badly!", ruleType: "simple" },
+      { root: "lead", affix: "mis-", type: "prefix", result: "mislead", rule: "Mis- means wrongly!", ruleType: "simple" },
+      // Prefix: pre-
+      { root: "view", affix: "pre-", type: "prefix", result: "preview", rule: "Pre- means before!", ruleType: "simple" },
+      { root: "heat", affix: "pre-", type: "prefix", result: "preheat", rule: "Pre- means before - heat before cooking!", ruleType: "simple" },
+      // Prefix: anti-
+      { root: "clockwise", affix: "anti-", type: "prefix", result: "anticlockwise", rule: "Anti- means against or opposite!", ruleType: "simple" },
+      // Prefix: auto-
+      { root: "graph", affix: "auto-", type: "prefix", result: "autograph", rule: "Auto- means self!", ruleType: "simple" },
+      // Suffix: -ful
+      { root: "hope", affix: "-ful", type: "suffix", result: "hopeful", rule: "Just add -ful! (Note: -ful has only one l)", ruleType: "simple" },
+      { root: "care", affix: "-ful", type: "suffix", result: "careful", rule: "Just add -ful!", ruleType: "simple" },
+      { root: "play", affix: "-ful", type: "suffix", result: "playful", rule: "Just add -ful!", ruleType: "simple" },
+      { root: "beauty", affix: "-ful", type: "suffix", result: "beautiful", rule: "Change y to i, then add -ful! beauty -> beauti + ful", ruleType: "y-to-i" },
+      { root: "plenty", affix: "-ful", type: "suffix", result: "plentiful", rule: "Change y to i, then add -ful!", ruleType: "y-to-i" },
+      // Suffix: -less
+      { root: "hope", affix: "-less", type: "suffix", result: "hopeless", rule: "Just add -less!", ruleType: "simple" },
+      { root: "care", affix: "-less", type: "suffix", result: "careless", rule: "Just add -less!", ruleType: "simple" },
+      { root: "home", affix: "-less", type: "suffix", result: "homeless", rule: "Just add -less!", ruleType: "simple" },
+      { root: "end", affix: "-less", type: "suffix", result: "endless", rule: "Just add -less!", ruleType: "simple" },
+      // Suffix: -ment
+      { root: "enjoy", affix: "-ment", type: "suffix", result: "enjoyment", rule: "Just add -ment!", ruleType: "simple" },
+      { root: "amaze", affix: "-ment", type: "suffix", result: "amazement", rule: "Keep the e and add -ment!", ruleType: "simple" },
+      { root: "excite", affix: "-ment", type: "suffix", result: "excitement", rule: "Keep the e and add -ment!", ruleType: "simple" },
+      { root: "move", affix: "-ment", type: "suffix", result: "movement", rule: "Keep the e and add -ment!", ruleType: "simple" },
+      // Suffix: -ness
+      { root: "kind", affix: "-ness", type: "suffix", result: "kindness", rule: "Just add -ness!", ruleType: "simple" },
+      { root: "dark", affix: "-ness", type: "suffix", result: "darkness", rule: "Just add -ness!", ruleType: "simple" },
+      { root: "sad", affix: "-ness", type: "suffix", result: "sadness", rule: "Just add -ness!", ruleType: "simple" },
+      { root: "happy", affix: "-ness", type: "suffix", result: "happiness", rule: "Change y to i, then add -ness!", ruleType: "y-to-i" },
+      { root: "lazy", affix: "-ness", type: "suffix", result: "laziness", rule: "Change y to i, then add -ness!", ruleType: "y-to-i" },
+      { root: "silly", affix: "-ness", type: "suffix", result: "silliness", rule: "Change y to i, then add -ness!", ruleType: "y-to-i" },
+      // Suffix: -ly
+      { root: "sad", affix: "-ly", type: "suffix", result: "sadly", rule: "Just add -ly!", ruleType: "simple" },
+      { root: "quick", affix: "-ly", type: "suffix", result: "quickly", rule: "Just add -ly!", ruleType: "simple" },
+      { root: "gentle", affix: "-ly", type: "suffix", result: "gently", rule: "Drop the -le, add -ly! gentle -> gent + ly", ruleType: "drop-le" },
+      { root: "simple", affix: "-ly", type: "suffix", result: "simply", rule: "Drop the -le, add -ly!", ruleType: "drop-le" },
+      { root: "possible", affix: "-ly", type: "suffix", result: "possibly", rule: "Drop the -le, add -ly!", ruleType: "drop-le" },
+      { root: "happy", affix: "-ly", type: "suffix", result: "happily", rule: "Change y to i, then add -ly!", ruleType: "y-to-i" },
+      { root: "angry", affix: "-ly", type: "suffix", result: "angrily", rule: "Change y to i, then add -ly!", ruleType: "y-to-i" },
+      { root: "easy", affix: "-ly", type: "suffix", result: "easily", rule: "Change y to i, then add -ly!", ruleType: "y-to-i" },
+      // Suffix: -tion
+      { root: "educate", affix: "-tion", type: "suffix", result: "education", rule: "Drop the e, add -tion!", ruleType: "drop-e" },
+      { root: "create", affix: "-tion", type: "suffix", result: "creation", rule: "Drop the e, add -tion!", ruleType: "drop-e" },
+      { root: "invent", affix: "-tion", type: "suffix", result: "invention", rule: "Just add -tion!", ruleType: "simple" },
+      { root: "complete", affix: "-tion", type: "suffix", result: "completion", rule: "Drop the e, add -tion!", ruleType: "drop-e" },
+      // Suffix: -sion
+      { root: "express", affix: "-sion", type: "suffix", result: "expression", rule: "Drop the last letters, add -ssion!", ruleType: "simple" },
+      { root: "decide", affix: "-sion", type: "suffix", result: "decision", rule: "Drop -de, add -sion!", ruleType: "drop-e" },
+      // Suffix: -ous
+      { root: "danger", affix: "-ous", type: "suffix", result: "dangerous", rule: "Just add -ous!", ruleType: "simple" },
+      { root: "fame", affix: "-ous", type: "suffix", result: "famous", rule: "Drop the e, add -ous!", ruleType: "drop-e" },
+      { root: "adventure", affix: "-ous", type: "suffix", result: "adventurous", rule: "Drop the e, add -ous!", ruleType: "drop-e" },
+      { root: "humour", affix: "-ous", type: "suffix", result: "humorous", rule: "Drop the -our, add -orous!", ruleType: "simple" },
+      // Suffix: -able / -ible
+      { root: "enjoy", affix: "-able", type: "suffix", result: "enjoyable", rule: "Just add -able!", ruleType: "simple" },
+      { root: "comfort", affix: "-able", type: "suffix", result: "comfortable", rule: "Just add -able!", ruleType: "simple" },
+      { root: "notice", affix: "-able", type: "suffix", result: "noticeable", rule: "Keep the e before -able (to keep the soft c sound)!", ruleType: "simple" },
+      { root: "adore", affix: "-able", type: "suffix", result: "adorable", rule: "Drop the e, add -able!", ruleType: "drop-e" },
+      { root: "sense", affix: "-ible", type: "suffix", result: "sensible", rule: "Drop the e, add -ible!", ruleType: "drop-e" },
+      { root: "horror", affix: "-ible", type: "suffix", result: "horrible", rule: "Drop the -or, add -ible!", ruleType: "simple" },
+      // Doubling consonant
+      { root: "run", affix: "-ing", type: "suffix", result: "running", rule: "Double the last consonant before -ing! (short vowel + single consonant)", ruleType: "double" },
+      { root: "sit", affix: "-ing", type: "suffix", result: "sitting", rule: "Double the last consonant! Short vowel + one consonant = double it!", ruleType: "double" },
+      { root: "swim", affix: "-ing", type: "suffix", result: "swimming", rule: "Double the m before -ing!", ruleType: "double" },
+      { root: "hop", affix: "-ing", type: "suffix", result: "hopping", rule: "Double the p! (hop = short vowel + consonant)", ruleType: "double" },
+      { root: "begin", affix: "-ing", type: "suffix", result: "beginning", rule: "Double the n before -ing! (stress on last syllable)", ruleType: "double" },
+      // Drop the e
+      { root: "hope", affix: "-ing", type: "suffix", result: "hoping", rule: "Drop the silent e before -ing!", ruleType: "drop-e" },
+      { root: "make", affix: "-ing", type: "suffix", result: "making", rule: "Drop the e before -ing!", ruleType: "drop-e" },
+      { root: "smile", affix: "-ing", type: "suffix", result: "smiling", rule: "Drop the e before -ing!", ruleType: "drop-e" },
+      { root: "write", affix: "-ing", type: "suffix", result: "writing", rule: "Drop the e before -ing!", ruleType: "drop-e" },
+      { root: "dance", affix: "-ing", type: "suffix", result: "dancing", rule: "Drop the e before -ing!", ruleType: "drop-e" },
+    ];
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟", "Brilliant! 💡", "Superstar! ⭐", "You rock! 🪨",
+      "Incredible! 🌈", "Genius! 🧠", "Fantastic! 🎉", "Wow! 🚀",
+      "Perfect! 🎯", "On fire! 🔥", "Legend! 🏆", "Unstoppable! ⚡",
+      "Wonderful! 💫", "Spectacular! ✨", "Magnificent! 👑",
+    ];
+
+    const WRONG_ENCOURAGEMENTS = [
+      "Almost! Try the next one! 💪", "So close! Keep going! 🌟",
+      "Oops! No worries! 😊", "Keep trying! 🚀",
+      "Nearly there! 🌈", "Don't give up! ✨",
+      "Good effort! Next one! 💫", "Learning is growing! 🌱",
+    ];
+
+    // ─── HELPERS ────────────────────────────────────────────────────
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function randFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function scrambleWord(word) {
+      let letters = word.split("");
+      let scrambled;
+      let attempts = 0;
+      do {
+        scrambled = shuffle(letters).join("");
+        attempts++;
+      } while (scrambled === word && attempts < 20);
+      return scrambled;
+    }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.value = 0.15;
+        if (type === "correct") {
+          osc.frequency.value = 523; osc.start();
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.35);
+          osc.stop(ctx.currentTime + 0.35);
+        } else if (type === "wrong") {
+          osc.frequency.value = 200; osc.type = "sawtooth"; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+          osc.stop(ctx.currentTime + 0.3);
+        } else if (type === "levelup") {
+          osc.frequency.value = 523; osc.start();
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3);
+          osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.45);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.7);
+          osc.stop(ctx.currentTime + 0.7);
+        } else if (type === "click") {
+          osc.frequency.value = 800; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.08);
+          osc.stop(ctx.currentTime + 0.08);
+        }
+      } catch (e) {}
+    }
+
+    function speakWord(word) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = "en-GB";
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {}
+    }
+
+    function loadStars() {
+      try { return parseInt(localStorage.getItem("spell_stars")) || 0; } catch { return 0; }
+    }
+    function saveStars(n) {
+      try { localStorage.setItem("spell_stars", n); } catch {}
+    }
+
+    // ─── CONFETTI ───────────────────────────────────────────────────
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        const items = Array.from({ length: 30 }, (_, i) => ({
+          id: Date.now() + i,
+          left: Math.random() * 100,
+          delay: Math.random() * 0.5,
+          emoji: randFrom(["🌟", "⭐", "🎉", "🎊", "✨", "💖", "🦄", "🌈"]),
+        }));
+        setPieces(items);
+        const timer = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(timer);
+      }, [active]);
+      return (<>
+        {pieces.map(p => (
+          <div key={p.id} className="confetti-piece" style={{ left: `${p.left}%`, animationDelay: `${p.delay}s` }}>{p.emoji}</div>
+        ))}
+      </>);
+    }
+
+    // ─── BUTTON ─────────────────────────────────────────────────────
+    function Btn({ children, onClick, color = "#3b82f6", big, disabled, style: extraStyle }) {
+      return (
+        <button onClick={() => { if (!disabled) { playSound("click"); onClick?.(); }}} disabled={disabled} style={{
+          padding: big ? "16px 32px" : "10px 20px", borderRadius: 14, border: "none",
+          background: disabled ? "#cbd5e1" : color, color: "#fff", fontWeight: 700,
+          fontSize: big ? 18 : 14, cursor: disabled ? "default" : "pointer",
+          boxShadow: disabled ? "none" : `0 4px 14px ${color}44`,
+          transition: "all 0.2s", transform: "scale(1)", ...extraStyle,
+        }}>{children}</button>
+      );
+    }
+
+    // ─── BACK BAR ───────────────────────────────────────────────────
+    function BackBar({ onBack, title }) {
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", marginBottom: 12 }}>
+          <button onClick={() => { playSound("click"); onBack(); }} style={{
+            width: 36, height: 36, borderRadius: 10, border: "none",
+            background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 18,
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          }}>←</button>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>{title}</span>
+        </div>
+      );
+    }
+
+    // ─── MODE CARD ──────────────────────────────────────────────────
+    function ModeCard({ emoji, title, desc, color, onClick }) {
+      return (
+        <button onClick={() => { playSound("click"); onClick(); }} style={{
+          display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
+          borderRadius: 16, border: "2px solid rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer",
+          textAlign: "left", transition: "all 0.2s", backdropFilter: "blur(10px)", width: "100%",
+        }}>
+          <div style={{ width: 50, height: 50, borderRadius: 14, background: color,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0,
+          }}>{emoji}</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{title}</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{desc}</div>
+          </div>
+        </button>
+      );
+    }
+
+    // ─── STREAK DISPLAY ─────────────────────────────────────────────
+    function StreakBar({ streak, total, correct }) {
+      return (
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 14px" }}>
+            <div style={{ fontSize: 10, opacity: 0.7 }}>Streak</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>🔥 {streak}</div>
+          </div>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "10px 14px" }}>
+            <div style={{ fontSize: 10, opacity: 0.7 }}>Score</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>✅ {correct}/{total}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── LETTER COMPARISON ──────────────────────────────────────────
+    function LetterComparison({ guess, correct }) {
+      const maxLen = Math.max(guess.length, correct.length);
+      return (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Your answer vs correct spelling:</div>
+          <div style={{ display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            {correct.split("").map((letter, i) => {
+              const guessLetter = guess[i] || "";
+              const isCorrect = guessLetter.toLowerCase() === letter.toLowerCase();
+              return (
+                <div key={i} style={{
+                  width: 32, height: 38, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 18, fontWeight: 800,
+                  background: isCorrect ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)",
+                  border: `2px solid ${isCorrect ? "#22c55e" : "#ef4444"}`,
+                  color: "#fff",
+                }}>{letter}</div>
+              );
+            })}
+          </div>
+          {guess.length !== correct.length && (
+            <div style={{ fontSize: 11, opacity: 0.7 }}>
+              The word has {correct.length} letters{guess.length > 0 ? `, you typed ${guess.length}` : ""}.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─── HOME SCREEN ────────────────────────────────────────────────
+    function HomeScreen({ onNavigate, stars }) {
+      const titles = [
+        { min: 0, title: "Beginner Speller", desc: "Just getting started!" },
+        { min: 15, title: "Word Learner", desc: "Learning new words!" },
+        { min: 40, title: "Spelling Star", desc: "Shining bright!" },
+        { min: 80, title: "Word Wizard", desc: "Magical with words!" },
+        { min: 130, title: "Spelling Champion", desc: "A true champion!" },
+        { min: 200, title: "Word Master", desc: "Master of all words!" },
+      ];
+      let currentTitle = titles[0];
+      for (const t of titles) { if (stars >= t.min) currentTitle = t; }
+      const nextTitle = titles.find(t => t.min > stars);
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #4c1d95 0%, #6d28d9 30%, #7c3aed 60%, #8b5cf6 100%)", padding: "30px 16px", color: "#fff", position: "relative" }}>
+          <a href="index.html" style={{ position: "absolute", top: 16, left: 16, width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>🏠</a>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            {/* Title */}
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }} className="float">📝</div>
+              <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 4 }}>
+                <span className="rainbow">Spelling</span>
+              </h1>
+              <h2 style={{ fontSize: 22, fontWeight: 700, opacity: 0.9 }}>Adventure!</h2>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 14px", backdropFilter: "blur(10px)" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 2 }}>Stars</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>⭐ {stars}</div>
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 2 }}>Title</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{currentTitle.title}</div>
+                <div style={{ fontSize: 10, opacity: 0.7 }}>{currentTitle.desc}</div>
+              </div>
+            </div>
+
+            {nextTitle && (
+              <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 12, padding: "10px 14px", marginBottom: 20, fontSize: 12 }}>
+                <span style={{ opacity: 0.7 }}>Next rank:</span> <strong>{nextTitle.title}</strong> <span style={{ opacity: 0.7 }}>at {nextTitle.min} ⭐</span>
+                <div style={{ marginTop: 6, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 3, background: "linear-gradient(90deg, #fbbf24, #f59e0b)", width: `${Math.min(100, ((stars - currentTitle.min) / (nextTitle.min - currentTitle.min)) * 100)}%`, transition: "width 0.5s" }} />
+                </div>
+              </div>
+            )}
+
+            {/* Game modes */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <ModeCard emoji="🐝" title="Spelling Bee" desc="Listen to the word and type the correct spelling!"
+                color="#f59e0b" onClick={() => onNavigate("bee")} />
+              <ModeCard emoji="🔀" title="Unscramble" desc="Unscramble the jumbled letters to spell the word!"
+                color="#10b981" onClick={() => onNavigate("unscramble")} />
+              <ModeCard emoji="⚠️" title="Tricky Words" desc="See the word briefly, then spell it from memory!"
+                color="#ef4444" onClick={() => onNavigate("tricky")} />
+              <ModeCard emoji="🎭" title="Homophones" desc="Pick the right word for the sentence!"
+                color="#3b82f6" onClick={() => onNavigate("homophones")} />
+              <ModeCard emoji="🔨" title="Word Builder" desc="Add prefixes and suffixes to build new words!"
+                color="#8b5cf6" onClick={() => onNavigate("builder")} />
+            </div>
+
+            {/* Titles progression */}
+            <div style={{ marginTop: 20, background: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.7, marginBottom: 10 }}>Spelling Ranks</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {titles.map((t, i) => (
+                  <span key={i} style={{ padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                    background: stars >= t.min ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)",
+                    opacity: stars >= t.min ? 1 : 0.4,
+                  }}>{t.min}⭐ {t.title}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── SPELLING BEE MODE ──────────────────────────────────────────
+    function SpellingBeeMode({ onBack, onStar }) {
+      const [words] = useState(() => shuffle(SPELLING_WORDS).slice(0, 10));
+      const [idx, setIdx] = useState(0);
+      const [input, setInput] = useState("");
+      const [result, setResult] = useState(null); // null | "correct" | "wrong"
+      const [streak, setStreak] = useState(0);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const inputRef = useRef(null);
+      const word = words[idx];
+      const done = idx >= words.length;
+
+      useEffect(() => {
+        if (!done && !result && inputRef.current) inputRef.current.focus();
+      }, [idx, result, done]);
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        if (!input.trim() || result) return;
+        const correct = input.trim().toLowerCase() === word.word.toLowerCase();
+        if (correct) {
+          playSound("correct");
+          setResult("correct");
+          setStreak(s => s + 1);
+          setCorrectCount(c => c + 1);
+          onStar();
+          if ((streak + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function nextWord() {
+        setIdx(i => i + 1);
+        setInput("");
+        setResult(null);
+        setShowConfetti(false);
+      }
+
+      if (done) {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }} className="bounce-in">🐝</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Spelling Bee Complete!</h2>
+              <p style={{ fontSize: 20, marginBottom: 24, opacity: 0.9 }}>You got {correctCount} out of {words.length} correct!</p>
+              <div style={{ fontSize: 48, marginBottom: 24 }}>{correctCount >= 8 ? "🏆" : correctCount >= 5 ? "⭐" : "💪"}</div>
+              <Btn onClick={onBack} color="#f59e0b" big>Back to Menu</Btn>
+            </div>
+            <Confetti active={correctCount >= 8} />
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Spelling Bee 🐝" />
+            <StreakBar streak={streak} total={idx + 1} correct={correctCount} />
+
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: 24, marginBottom: 16, backdropFilter: "blur(10px)" }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>Word {idx + 1} of {words.length}</div>
+
+              {/* Hint/definition */}
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, lineHeight: 1.5 }}>
+                💡 {word.hint}
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 16, fontStyle: "italic" }}>
+                "{word.example}"
+              </div>
+
+              {/* Speak button */}
+              <button onClick={() => speakWord(word.word)} style={{
+                padding: "10px 20px", borderRadius: 12, border: "2px solid rgba(255,255,255,0.3)",
+                background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 16, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 8, margin: "0 auto 16px",
+              }}>
+                🔊 Listen to the word
+              </button>
+
+              {/* Input */}
+              <form onSubmit={handleSubmit}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Type the spelling..."
+                  disabled={!!result}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+                {!result && (
+                  <div style={{ marginTop: 12, textAlign: "center" }}>
+                    <Btn onClick={() => handleSubmit({ preventDefault: () => {} })} color="#f59e0b" disabled={!input.trim()}>Check Spelling</Btn>
+                  </div>
+                )}
+              </form>
+
+              {/* Result */}
+              {result === "correct" && (
+                <div className="bounce-in" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{randFrom(ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 16, marginTop: 4 }}>The word is: <strong>{word.word}</strong></div>
+                </div>
+              )}
+              {result === "wrong" && (
+                <div className="shake" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#fca5a5" }}>{randFrom(WRONG_ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>The correct spelling is: <strong>{word.word}</strong></div>
+                  <LetterComparison guess={input.trim()} correct={word.word} />
+                </div>
+              )}
+
+              {result && (
+                <div style={{ marginTop: 16, textAlign: "center" }}>
+                  <Btn onClick={nextWord} color="#f59e0b">Next Word →</Btn>
+                </div>
+              )}
+            </div>
+          </div>
+          <Confetti active={showConfetti} />
+        </div>
+      );
+    }
+
+    // ─── UNSCRAMBLE MODE ────────────────────────────────────────────
+    function UnscrambleMode({ onBack, onStar }) {
+      const [words] = useState(() => shuffle(SPELLING_WORDS).slice(0, 10));
+      const [idx, setIdx] = useState(0);
+      const [scrambled, setScrambled] = useState(() => scrambleWord(words[0].word));
+      const [input, setInput] = useState("");
+      const [result, setResult] = useState(null);
+      const [streak, setStreak] = useState(0);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const inputRef = useRef(null);
+      const word = words[idx];
+      const done = idx >= words.length;
+
+      useEffect(() => {
+        if (!done && !result && inputRef.current) inputRef.current.focus();
+      }, [idx, result, done]);
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        if (!input.trim() || result) return;
+        const correct = input.trim().toLowerCase() === word.word.toLowerCase();
+        if (correct) {
+          playSound("correct");
+          setResult("correct");
+          setStreak(s => s + 1);
+          setCorrectCount(c => c + 1);
+          onStar();
+          if ((streak + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function nextWord() {
+        const nextIdx = idx + 1;
+        setIdx(nextIdx);
+        if (nextIdx < words.length) setScrambled(scrambleWord(words[nextIdx].word));
+        setInput("");
+        setResult(null);
+        setShowConfetti(false);
+      }
+
+      if (done) {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #10b981 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }} className="bounce-in">🔀</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Unscramble Complete!</h2>
+              <p style={{ fontSize: 20, marginBottom: 24, opacity: 0.9 }}>You got {correctCount} out of {words.length} correct!</p>
+              <div style={{ fontSize: 48, marginBottom: 24 }}>{correctCount >= 8 ? "🏆" : correctCount >= 5 ? "⭐" : "💪"}</div>
+              <Btn onClick={onBack} color="#10b981" big>Back to Menu</Btn>
+            </div>
+            <Confetti active={correctCount >= 8} />
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #10b981 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Unscramble 🔀" />
+            <StreakBar streak={streak} total={idx + 1} correct={correctCount} />
+
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: 24, marginBottom: 16, backdropFilter: "blur(10px)" }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>Word {idx + 1} of {words.length}</div>
+
+              {/* Scrambled letters */}
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
+                {scrambled.split("").map((letter, i) => (
+                  <div key={i} style={{
+                    width: 40, height: 46, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 22, fontWeight: 800, background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.3)",
+                  }}>{letter}</div>
+                ))}
+              </div>
+
+              {/* Hint */}
+              <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 16, textAlign: "center" }}>
+                💡 Hint: {word.hint}
+              </div>
+
+              {/* Input */}
+              <form onSubmit={handleSubmit}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Type the word..."
+                  disabled={!!result}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+                {!result && (
+                  <div style={{ marginTop: 12, textAlign: "center" }}>
+                    <Btn onClick={() => handleSubmit({ preventDefault: () => {} })} color="#10b981" disabled={!input.trim()}>Check Answer</Btn>
+                  </div>
+                )}
+              </form>
+
+              {result === "correct" && (
+                <div className="bounce-in" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{randFrom(ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 16, marginTop: 4 }}>✅ <strong>{word.word}</strong></div>
+                </div>
+              )}
+              {result === "wrong" && (
+                <div className="shake" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#fca5a5" }}>{randFrom(WRONG_ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>The word was: <strong>{word.word}</strong></div>
+                  <LetterComparison guess={input.trim()} correct={word.word} />
+                </div>
+              )}
+
+              {result && (
+                <div style={{ marginTop: 16, textAlign: "center" }}>
+                  <Btn onClick={nextWord} color="#10b981">Next Word →</Btn>
+                </div>
+              )}
+            </div>
+          </div>
+          <Confetti active={showConfetti} />
+        </div>
+      );
+    }
+
+    // ─── TRICKY WORDS MODE ──────────────────────────────────────────
+    function TrickyWordsMode({ onBack, onStar }) {
+      const [words] = useState(() => shuffle(TRICKY_WORDS).slice(0, 10));
+      const [idx, setIdx] = useState(0);
+      const [phase, setPhase] = useState("show"); // show | type | result
+      const [input, setInput] = useState("");
+      const [result, setResult] = useState(null);
+      const [streak, setStreak] = useState(0);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [timer, setTimer] = useState(3);
+      const inputRef = useRef(null);
+      const word = words[idx];
+      const done = idx >= words.length;
+
+      // 3-second countdown in "show" phase
+      useEffect(() => {
+        if (done || phase !== "show") return;
+        setTimer(3);
+        const interval = setInterval(() => {
+          setTimer(t => {
+            if (t <= 1) {
+              clearInterval(interval);
+              setPhase("type");
+              return 0;
+            }
+            return t - 1;
+          });
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [idx, phase, done]);
+
+      useEffect(() => {
+        if (phase === "type" && inputRef.current) inputRef.current.focus();
+      }, [phase]);
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        if (!input.trim() || phase !== "type") return;
+        const correct = input.trim().toLowerCase() === word.word.toLowerCase();
+        if (correct) {
+          playSound("correct");
+          setResult("correct");
+          setPhase("result");
+          setStreak(s => s + 1);
+          setCorrectCount(c => c + 1);
+          onStar();
+          if ((streak + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setPhase("result");
+          setStreak(0);
+        }
+      }
+
+      function nextWord() {
+        setIdx(i => i + 1);
+        setInput("");
+        setResult(null);
+        setPhase("show");
+        setShowConfetti(false);
+      }
+
+      if (done) {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }} className="bounce-in">⚠️</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Tricky Words Complete!</h2>
+              <p style={{ fontSize: 20, marginBottom: 24, opacity: 0.9 }}>You got {correctCount} out of {words.length} correct!</p>
+              <div style={{ fontSize: 48, marginBottom: 24 }}>{correctCount >= 8 ? "🏆" : correctCount >= 5 ? "⭐" : "💪"}</div>
+              <Btn onClick={onBack} color="#ef4444" big>Back to Menu</Btn>
+            </div>
+            <Confetti active={correctCount >= 8} />
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Tricky Words ⚠️" />
+            <StreakBar streak={streak} total={idx + 1} correct={correctCount} />
+
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: 24, marginBottom: 16, backdropFilter: "blur(10px)" }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>Word {idx + 1} of {words.length}</div>
+
+              {phase === "show" && (
+                <div className="bounce-in" style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 14, opacity: 0.7, marginBottom: 12 }}>Remember this word!</div>
+                  <div style={{ fontSize: 36, fontWeight: 800, marginBottom: 16, letterSpacing: 2 }}>{word.word}</div>
+                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(255,255,255,0.15)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800,
+                    margin: "0 auto", animation: "pulse 1s ease-in-out infinite",
+                  }}>{timer}</div>
+                  <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>Disappearing in {timer}...</div>
+                </div>
+              )}
+
+              {phase === "type" && (
+                <div className="fade-slide">
+                  <div style={{ fontSize: 14, marginBottom: 16, textAlign: "center" }}>
+                    🧠 Now type the word from memory!
+                  </div>
+                  <form onSubmit={handleSubmit}>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      placeholder="Type the word..."
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                    />
+                    <div style={{ marginTop: 12, textAlign: "center" }}>
+                      <Btn onClick={() => handleSubmit({ preventDefault: () => {} })} color="#ef4444" disabled={!input.trim()}>Check Spelling</Btn>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {phase === "result" && (
+                <div>
+                  {result === "correct" ? (
+                    <div className="bounce-in" style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{randFrom(ENCOURAGEMENTS)}</div>
+                      <div style={{ fontSize: 16, marginTop: 4 }}>✅ <strong>{word.word}</strong></div>
+                    </div>
+                  ) : (
+                    <div className="shake" style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#fca5a5" }}>{randFrom(WRONG_ENCOURAGEMENTS)}</div>
+                      <div style={{ fontSize: 14, marginTop: 4 }}>The word was: <strong>{word.word}</strong></div>
+                      <LetterComparison guess={input.trim()} correct={word.word} />
+                    </div>
+                  )}
+
+                  {/* Memory trick */}
+                  <div style={{ marginTop: 16, background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>🧠 Memory Trick:</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.5 }}>{word.trick}</div>
+                  </div>
+
+                  <div style={{ marginTop: 16, textAlign: "center" }}>
+                    <Btn onClick={nextWord} color="#ef4444">Next Word →</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <Confetti active={showConfetti} />
+        </div>
+      );
+    }
+
+    // ─── HOMOPHONES MODE ────────────────────────────────────────────
+    function HomophonesMode({ onBack, onStar }) {
+      const [questions] = useState(() => {
+        const all = [];
+        HOMOPHONES.forEach(group => {
+          group.sentences.forEach(s => all.push({ ...s, words: group.words, meanings: group.meanings }));
+        });
+        return shuffle(all).slice(0, 12);
+      });
+      const [idx, setIdx] = useState(0);
+      const [selected, setSelected] = useState(null);
+      const [result, setResult] = useState(null);
+      const [streak, setStreak] = useState(0);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const q = questions[idx];
+      const done = idx >= questions.length;
+
+      function handlePick(word) {
+        if (result) return;
+        setSelected(word);
+        const correct = word === q.answer;
+        if (correct) {
+          playSound("correct");
+          setResult("correct");
+          setStreak(s => s + 1);
+          setCorrectCount(c => c + 1);
+          onStar();
+          if ((streak + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function nextQuestion() {
+        setIdx(i => i + 1);
+        setSelected(null);
+        setResult(null);
+        setShowConfetti(false);
+      }
+
+      if (done) {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 50%, #3b82f6 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }} className="bounce-in">🎭</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Homophones Complete!</h2>
+              <p style={{ fontSize: 20, marginBottom: 24, opacity: 0.9 }}>You got {correctCount} out of {questions.length} correct!</p>
+              <div style={{ fontSize: 48, marginBottom: 24 }}>{correctCount >= 10 ? "🏆" : correctCount >= 6 ? "⭐" : "💪"}</div>
+              <Btn onClick={onBack} color="#3b82f6" big>Back to Menu</Btn>
+            </div>
+            <Confetti active={correctCount >= 10} />
+          </div>
+        );
+      }
+
+      // Split sentence around blank
+      const parts = q.sentence.split("___");
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 50%, #3b82f6 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Homophones 🎭" />
+            <StreakBar streak={streak} total={idx + 1} correct={correctCount} />
+
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: 24, marginBottom: 16, backdropFilter: "blur(10px)" }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>Question {idx + 1} of {questions.length}</div>
+
+              {/* Sentence with blank */}
+              <div style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.6, marginBottom: 20, textAlign: "center" }}>
+                {parts[0]}
+                <span style={{
+                  display: "inline-block", minWidth: 80, padding: "2px 12px", borderRadius: 8, margin: "0 4px",
+                  background: result ? (selected === q.answer ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)") : "rgba(255,255,255,0.2)",
+                  border: `2px dashed ${result ? (selected === q.answer ? "#22c55e" : "#ef4444") : "rgba(255,255,255,0.4)"}`,
+                  fontWeight: 800,
+                }}>
+                  {selected || "___"}
+                </span>
+                {parts[1]}
+              </div>
+
+              {/* Options */}
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
+                {q.words.map(w => {
+                  let bg = "rgba(255,255,255,0.15)";
+                  let border = "2px solid rgba(255,255,255,0.2)";
+                  if (result) {
+                    if (w === q.answer) { bg = "rgba(34,197,94,0.3)"; border = "2px solid #22c55e"; }
+                    else if (w === selected) { bg = "rgba(239,68,68,0.3)"; border = "2px solid #ef4444"; }
+                  } else if (w === selected) {
+                    bg = "rgba(255,255,255,0.3)"; border = "2px solid rgba(255,255,255,0.5)";
+                  }
+                  return (
+                    <button key={w} onClick={() => handlePick(w)} disabled={!!result} style={{
+                      padding: "12px 24px", borderRadius: 12, background: bg, border,
+                      color: "#fff", fontSize: 18, fontWeight: 700, cursor: result ? "default" : "pointer",
+                      transition: "all 0.2s", minWidth: 90,
+                    }}>{w}</button>
+                  );
+                })}
+              </div>
+
+              {/* Result & explanation */}
+              {result && (
+                <div className={result === "correct" ? "bounce-in" : "shake"}>
+                  {result === "correct" ? (
+                    <div style={{ textAlign: "center", color: "#4ade80", fontWeight: 800, fontSize: 20, marginBottom: 8 }}>
+                      {randFrom(ENCOURAGEMENTS)}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", color: "#fca5a5", fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+                      {randFrom(WRONG_ENCOURAGEMENTS)} The answer is <strong>{q.answer}</strong>.
+                    </div>
+                  )}
+
+                  <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>📖 {q.explain}</div>
+                  </div>
+
+                  {/* Meanings reference */}
+                  <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, opacity: 0.7 }}>Quick Reference:</div>
+                    {q.words.map(w => (
+                      <div key={w} style={{ fontSize: 12, lineHeight: 1.6 }}>
+                        <strong>{w}</strong> = {q.meanings[w]}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 16, textAlign: "center" }}>
+                    <Btn onClick={nextQuestion} color="#3b82f6">Next Question →</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <Confetti active={showConfetti} />
+        </div>
+      );
+    }
+
+    // ─── WORD BUILDER MODE ──────────────────────────────────────────
+    function WordBuilderMode({ onBack, onStar }) {
+      const [words] = useState(() => shuffle(WORD_BUILDER_DATA).slice(0, 10));
+      const [idx, setIdx] = useState(0);
+      const [input, setInput] = useState("");
+      const [result, setResult] = useState(null);
+      const [streak, setStreak] = useState(0);
+      const [correctCount, setCorrectCount] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const inputRef = useRef(null);
+      const word = words[idx];
+      const done = idx >= words.length;
+
+      useEffect(() => {
+        if (!done && !result && inputRef.current) inputRef.current.focus();
+      }, [idx, result, done]);
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        if (!input.trim() || result) return;
+        const correct = input.trim().toLowerCase() === word.result.toLowerCase();
+        if (correct) {
+          playSound("correct");
+          setResult("correct");
+          setStreak(s => s + 1);
+          setCorrectCount(c => c + 1);
+          onStar();
+          if ((streak + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function nextWord() {
+        setIdx(i => i + 1);
+        setInput("");
+        setResult(null);
+        setShowConfetti(false);
+      }
+
+      if (done) {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }} className="bounce-in">🔨</div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Word Builder Complete!</h2>
+              <p style={{ fontSize: 20, marginBottom: 24, opacity: 0.9 }}>You got {correctCount} out of {words.length} correct!</p>
+              <div style={{ fontSize: 48, marginBottom: 24 }}>{correctCount >= 8 ? "🏆" : correctCount >= 5 ? "⭐" : "💪"}</div>
+              <Btn onClick={onBack} color="#8b5cf6" big>Back to Menu</Btn>
+            </div>
+            <Confetti active={correctCount >= 8} />
+          </div>
+        );
+      }
+
+      const ruleTypeLabel = {
+        "simple": "📗 Simple - just join them!",
+        "drop-e": "📕 Rule: Drop the silent e!",
+        "y-to-i": "📙 Rule: Change y to i!",
+        "double": "📘 Rule: Double the last consonant!",
+        "drop-le": "📒 Rule: Drop -le, add -ly!",
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Word Builder 🔨" />
+            <StreakBar streak={streak} total={idx + 1} correct={correctCount} />
+
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: 24, marginBottom: 16, backdropFilter: "blur(10px)" }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>Word {idx + 1} of {words.length}</div>
+
+              {/* Visual: root + affix */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                {word.type === "prefix" ? (
+                  <>
+                    <div style={{ padding: "10px 18px", borderRadius: 12, background: "rgba(251,191,36,0.3)", border: "2px solid #fbbf24", fontSize: 22, fontWeight: 800 }}>
+                      {word.affix}
+                    </div>
+                    <div style={{ fontSize: 28, fontWeight: 300 }}>+</div>
+                    <div style={{ padding: "10px 18px", borderRadius: 12, background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.3)", fontSize: 22, fontWeight: 800 }}>
+                      {word.root}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ padding: "10px 18px", borderRadius: 12, background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.3)", fontSize: 22, fontWeight: 800 }}>
+                      {word.root}
+                    </div>
+                    <div style={{ fontSize: 28, fontWeight: 300 }}>+</div>
+                    <div style={{ padding: "10px 18px", borderRadius: 12, background: "rgba(251,191,36,0.3)", border: "2px solid #fbbf24", fontSize: 22, fontWeight: 800 }}>
+                      {word.affix}
+                    </div>
+                  </>
+                )}
+                <div style={{ fontSize: 28, fontWeight: 300 }}>=</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>?</div>
+              </div>
+
+              {/* Rule type hint */}
+              <div style={{ fontSize: 13, opacity: 0.8, textAlign: "center", marginBottom: 16 }}>
+                {ruleTypeLabel[word.ruleType] || ""}
+              </div>
+
+              {/* Input */}
+              <form onSubmit={handleSubmit}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Type the new word..."
+                  disabled={!!result}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+                {!result && (
+                  <div style={{ marginTop: 12, textAlign: "center" }}>
+                    <Btn onClick={() => handleSubmit({ preventDefault: () => {} })} color="#8b5cf6" disabled={!input.trim()}>Check Word</Btn>
+                  </div>
+                )}
+              </form>
+
+              {result === "correct" && (
+                <div className="bounce-in" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#4ade80" }}>{randFrom(ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 16, marginTop: 4 }}>✅ <strong>{word.result}</strong></div>
+                </div>
+              )}
+              {result === "wrong" && (
+                <div className="shake" style={{ marginTop: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#fca5a5" }}>{randFrom(WRONG_ENCOURAGEMENTS)}</div>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>The answer is: <strong>{word.result}</strong></div>
+                  <LetterComparison guess={input.trim()} correct={word.result} />
+                </div>
+              )}
+
+              {result && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>📝 Spelling Rule:</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.5 }}>{word.rule}</div>
+                  </div>
+                  <div style={{ marginTop: 12, textAlign: "center" }}>
+                    <Btn onClick={nextWord} color="#8b5cf6">Next Word →</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <Confetti active={showConfetti} />
+        </div>
+      );
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [stars, setStars] = useState(loadStars);
+
+      function addStar() {
+        setStars(s => {
+          const next = s + 1;
+          saveStars(next);
+          return next;
+        });
+      }
+
+      switch (screen) {
+        case "bee":
+          return <SpellingBeeMode onBack={() => setScreen("home")} onStar={addStar} />;
+        case "unscramble":
+          return <UnscrambleMode onBack={() => setScreen("home")} onStar={addStar} />;
+        case "tricky":
+          return <TrickyWordsMode onBack={() => setScreen("home")} onStar={addStar} />;
+        case "homophones":
+          return <HomophonesMode onBack={() => setScreen("home")} onStar={addStar} />;
+        case "builder":
+          return <WordBuilderMode onBack={() => setScreen("home")} onStar={addStar} />;
+        default:
+          return <HomeScreen onNavigate={setScreen} stars={stars} />;
+      }
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

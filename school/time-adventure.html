@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Time Adventure!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    @keyframes rainbow { 0%{color:#ef4444}16%{color:#f97316}33%{color:#eab308}50%{color:#22c55e}66%{color:#3b82f6}83%{color:#8b5cf6}100%{color:#ef4444} }
+    @keyframes tickTock { 0%{transform:rotate(-10deg)}50%{transform:rotate(10deg)}100%{transform:rotate(-10deg)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .rainbow{animation:rainbow 3s linear infinite}
+    .tick-tock{animation:tickTock 1s ease-in-out infinite;transform-origin:50% 0}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Wow! 🚀",
+      "Perfect! 🎯","On fire! 🔥","Legend! 🏆","Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type==="correct") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.1); osc.frequency.setValueAtTime(784,ctx.currentTime+0.2); gain.gain.setValueAtTime(0,ctx.currentTime+0.35); osc.stop(ctx.currentTime+0.35); }
+        else if (type==="wrong") { osc.frequency.value=200; osc.type="sawtooth"; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.3); osc.stop(ctx.currentTime+0.3); }
+        else if (type==="levelup") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.15); osc.frequency.setValueAtTime(784,ctx.currentTime+0.3); osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45); gain.gain.setValueAtTime(0,ctx.currentTime+0.7); osc.stop(ctx.currentTime+0.7); }
+        else if (type==="click") { osc.frequency.value=800; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.06); osc.stop(ctx.currentTime+0.06); }
+        else if (type==="tick") { osc.frequency.value=1000; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.03); osc.stop(ctx.currentTime+0.03); }
+      } catch(e) {}
+    }
+
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        setPieces(Array.from({length:25},(_,i) => ({ id:Date.now()+i, left:Math.random()*100, delay:Math.random()*0.5, emoji:randFrom(["🌟","⭐","🎉","🎊","✨","💖","⏰","🕐"]) })));
+        const t = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(t);
+      }, [active]);
+      return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left:`${p.left}%`, animationDelay:`${p.delay}s` }}>{p.emoji}</div>)}</>;
+    }
+
+    function Btn({ children, onClick, color="#3b82f6", big, disabled, active, style:s }) {
+      return <button onClick={() => { if(!disabled){playSound("click");onClick?.();}}} disabled={disabled} style={{
+        padding: big?"16px 32px":"10px 20px", borderRadius:14,
+        border: active ? "3px solid #fff" : "3px solid transparent",
+        background: disabled?"#cbd5e1":color, color:"#fff", fontWeight:700,
+        fontSize: big?18:14, cursor: disabled?"default":"pointer",
+        boxShadow: disabled?"none":`0 4px 14px ${color}44`, transition:"all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function BackBar({ onBack, title }) {
+      return <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", marginBottom:12 }}>
+        <button onClick={() => {playSound("click");onBack();}} style={{
+          width:36,height:36,borderRadius:10,border:"none",background:"rgba(255,255,255,0.15)",
+          color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+        }}>{"←"}</button>
+        <span style={{ fontWeight:700, fontSize:18, color:"#fff" }}>{title}</span>
+      </div>;
+    }
+
+    function ModeCard({ emoji, title, desc, color, onClick }) {
+      return <button onClick={() => {playSound("click");onClick();}} style={{
+        display:"flex", alignItems:"center", gap:14, padding:"16px 18px", borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.07)",
+        color:"#fff", cursor:"pointer", textAlign:"left", transition:"all 0.2s", width:"100%",
+      }}>
+        <div style={{ width:50,height:50,borderRadius:14,background:color,display:"flex",
+          alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0 }}>{emoji}</div>
+        <div>
+          <div style={{ fontWeight:700, fontSize:16, marginBottom:2 }}>{title}</div>
+          <div style={{ fontSize:12, opacity:0.7 }}>{desc}</div>
+        </div>
+      </button>;
+    }
+
+    // ─── CLOCK FACE COMPONENT ─────────────────────────────────────
+    function ClockFace({ hours, minutes, size=180 }) {
+      const h = hours % 12;
+      const m = minutes;
+      const hourAngle = (h * 30) + (m * 0.5);
+      const minuteAngle = m * 6;
+      const r = size/2;
+      const cx = r, cy = r;
+      const hourLen = r * 0.5;
+      const minLen = r * 0.75;
+      const hourRad = (hourAngle - 90) * Math.PI/180;
+      const minRad = (minuteAngle - 90) * Math.PI/180;
+
+      return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r-4} fill="white" stroke="#e2e8f0" strokeWidth={3}/>
+        <circle cx={cx} cy={cy} r={4} fill="#334155"/>
+        {Array.from({length:12},(_,i) => {
+          const angle = ((i+1)*30 - 90) * Math.PI/180;
+          const x = cx + Math.cos(angle) * (r-18);
+          const y = cy + Math.sin(angle) * (r-18);
+          return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="central"
+            style={{fontSize:size>140?14:11, fontWeight:700, fill:"#334155"}}>{i+1}</text>;
+        })}
+        {Array.from({length:60},(_,i) => {
+          const angle = (i*6 - 90) * Math.PI/180;
+          const outer = r-8;
+          const inner = i%5===0 ? r-14 : r-11;
+          return <line key={i} x1={cx+Math.cos(angle)*inner} y1={cy+Math.sin(angle)*inner}
+            x2={cx+Math.cos(angle)*outer} y2={cy+Math.sin(angle)*outer}
+            stroke={i%5===0?"#64748b":"#cbd5e1"} strokeWidth={i%5===0?2:1}/>;
+        })}
+        <line x1={cx} y1={cy} x2={cx+Math.cos(hourRad)*hourLen} y2={cy+Math.sin(hourRad)*hourLen}
+          stroke="#1e293b" strokeWidth={4} strokeLinecap="round"/>
+        <line x1={cx} y1={cy} x2={cx+Math.cos(minRad)*minLen} y2={cy+Math.sin(minRad)*minLen}
+          stroke="#3b82f6" strokeWidth={3} strokeLinecap="round"/>
+      </svg>;
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    function Home({ onNav, totalStars }) {
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)", padding:"30px 16px", color:"#fff", position:"relative" }}>
+        <a href="index.html" style={{ position:"absolute", top:16, left:16, width:36, height:36, borderRadius:10, background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none" }}>🏠</a>
+        <div style={{ maxWidth:500, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ fontSize:56, marginBottom:8 }} className="float">⏰</div>
+          <h1 style={{ fontSize:30, fontWeight:800, marginBottom:4 }}>
+            <span className="rainbow">Time Adventure!</span>
+          </h1>
+          <p style={{ fontSize:14, opacity:0.8, marginBottom:8 }}>Master hours, minutes and seconds</p>
+          <div style={{ fontSize:16, fontWeight:700, marginBottom:28 }}>⭐ {totalStars} stars collected</div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, textAlign:"left" }}>
+            <ModeCard emoji="⏰" title="Learn" desc="Discover how hours, minutes and seconds work together!"
+              color="#10b981" onClick={() => onNav("learn")} />
+            <ModeCard emoji="🔄" title="Convert It!" desc="Practice converting between hours, minutes and seconds"
+              color="#3b82f6" onClick={() => onNav("convert")} />
+            <ModeCard emoji="🧩" title="Time Riddles" desc="Solve fun word problems about time!"
+              color="#8b5cf6" onClick={() => onNav("riddles")} />
+            <ModeCard emoji="⚡" title="Speed Round" desc="60 seconds — how many conversions can you crack?"
+              color="#ef4444" onClick={() => onNav("speed")} />
+            <ModeCard emoji="⏳" title="Time Builder" desc="Build up and break down times visually!"
+              color="#f59e0b" onClick={() => onNav("builder")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── LEARN MODE ─────────────────────────────────────────────────
+    function LearnMode({ onBack }) {
+      const [clockH, setClockH] = useState(3);
+      const [clockM, setClockM] = useState(0);
+      const [factIdx, setFactIdx] = useState(0);
+
+      const funFacts = [
+        { icon: "🌍", fact: "The Earth takes 24 hours (1,440 minutes!) to spin around once." },
+        { icon: "💓", fact: "Your heart beats about once every second — that's 60 beats per minute!" },
+        { icon: "⚡", fact: "A bolt of lightning lasts less than 1 second — about 0.0002 seconds!" },
+        { icon: "🐆", fact: "A cheetah can run 100 metres in about 6 seconds." },
+        { icon: "🌙", fact: "One day on the Moon lasts about 708 hours — that's nearly 30 Earth days!" },
+        { icon: "🍳", fact: "A soft-boiled egg takes 180 seconds (3 minutes) to cook." },
+        { icon: "🎵", fact: "Most pop songs are about 3 minutes and 30 seconds — that's 210 seconds!" },
+        { icon: "🚀", fact: "It takes about 8 minutes (480 seconds) for sunlight to reach Earth." },
+      ];
+
+      const keyFacts = [
+        { label: "1 minute", value: "60 seconds", icon: "⏱️" },
+        { label: "1 hour", value: "60 minutes", icon: "🕐" },
+        { label: "1 hour", value: "3,600 seconds", icon: "🤯" },
+        { label: "Half hour", value: "30 minutes", icon: "🕧" },
+        { label: "Quarter hour", value: "15 minutes", icon: "🕐" },
+        { label: "1 day", value: "24 hours", icon: "📅" },
+        { label: "1 day", value: "1,440 minutes", icon: "🔢" },
+      ];
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Learn ⏰" />
+
+          {/* Interactive Clock */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:20, padding:20, marginBottom:16, textAlign:"center" }}>
+            <h3 style={{ marginBottom:12 }}>Interactive Clock</h3>
+            <div style={{ display:"flex", justifyContent:"center", marginBottom:12 }}>
+              <ClockFace hours={clockH} minutes={clockM} size={180} />
+            </div>
+            <div style={{ fontSize:28, fontWeight:800, marginBottom:12 }}>
+              {String(clockH).padStart(2,"0")}:{String(clockM).padStart(2,"0")}
+            </div>
+            <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+              <Btn onClick={() => setClockH(h => (h+1)%24)} color="#0d9488" style={{fontSize:12,padding:"6px 12px"}}>Hour +1</Btn>
+              <Btn onClick={() => setClockH(h => (h+23)%24)} color="#0d9488" style={{fontSize:12,padding:"6px 12px"}}>Hour -1</Btn>
+              <Btn onClick={() => { setClockM(m => { const n=(m+15)%60; if(m+15>=60) setClockH(h=>(h+1)%24); return n; }); }} color="#0891b2" style={{fontSize:12,padding:"6px 12px"}}>+15 min</Btn>
+              <Btn onClick={() => { setClockM(m => { const n=(m+5)%60; if(m+5>=60) setClockH(h=>(h+1)%24); return n; }); }} color="#0891b2" style={{fontSize:12,padding:"6px 12px"}}>+5 min</Btn>
+            </div>
+          </div>
+
+          {/* Conversion chain */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:20, padding:20, marginBottom:16, textAlign:"center", animationDelay:"0.1s" }}>
+            <h3 style={{ marginBottom:12 }}>The Conversion Chain</h3>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, flexWrap:"wrap", fontSize:15, fontWeight:700 }}>
+              <span style={{ background:"#f59e0b", padding:"8px 14px", borderRadius:12 }}>1 hour</span>
+              <span style={{ fontSize:20 }}>=</span>
+              <span style={{ background:"#3b82f6", padding:"8px 14px", borderRadius:12 }}>60 minutes</span>
+              <span style={{ fontSize:20 }}>=</span>
+              <span style={{ background:"#8b5cf6", padding:"8px 14px", borderRadius:12 }}>3,600 seconds</span>
+            </div>
+            <div style={{ marginTop:16, display:"flex", justifyContent:"center", gap:12 }}>
+              <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:12, padding:"10px 14px", textAlign:"center" }}>
+                <div style={{ fontSize:24 }}>×60</div>
+                <div style={{ fontSize:11, opacity:0.8 }}>hours → minutes</div>
+              </div>
+              <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:12, padding:"10px 14px", textAlign:"center" }}>
+                <div style={{ fontSize:24 }}>×60</div>
+                <div style={{ fontSize:11, opacity:0.8 }}>minutes → seconds</div>
+              </div>
+              <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:12, padding:"10px 14px", textAlign:"center" }}>
+                <div style={{ fontSize:24 }}>÷60</div>
+                <div style={{ fontSize:11, opacity:0.8 }}>going back!</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Facts */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:20, padding:20, marginBottom:16, animationDelay:"0.2s" }}>
+            <h3 style={{ marginBottom:12, textAlign:"center" }}>Key Facts</h3>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {keyFacts.map((f,i) => <div key={i} style={{ background:"rgba(255,255,255,0.1)", borderRadius:12, padding:"10px 12px", textAlign:"center" }}>
+                <div style={{ fontSize:20 }}>{f.icon}</div>
+                <div style={{ fontSize:13, fontWeight:700 }}>{f.label}</div>
+                <div style={{ fontSize:12, opacity:0.9 }}>= {f.value}</div>
+              </div>)}
+            </div>
+          </div>
+
+          {/* Fun Facts */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:20, padding:20, animationDelay:"0.3s" }}>
+            <h3 style={{ marginBottom:12, textAlign:"center" }}>Did You Know? 🤔</h3>
+            <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:14, padding:16, textAlign:"center", minHeight:80, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ fontSize:36, marginBottom:6 }}>{funFacts[factIdx].icon}</div>
+              <div style={{ fontSize:14, lineHeight:1.5 }}>{funFacts[factIdx].fact}</div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"center", gap:8, marginTop:10 }}>
+              <Btn onClick={() => setFactIdx(i => (i+funFacts.length-1)%funFacts.length)} color="#0d9488" style={{fontSize:12,padding:"6px 14px"}}>← Previous</Btn>
+              <Btn onClick={() => setFactIdx(i => (i+1)%funFacts.length)} color="#0d9488" style={{fontSize:12,padding:"6px 14px"}}>Next →</Btn>
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── CONVERT IT! MODE ────────────────────────────────────────────
+    function ConvertMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({ correct:0, total:0 });
+      const [streak, setStreak] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const [difficulty, setDifficulty] = useState(0);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const diff = difficulty;
+        let question, answer, working;
+        const types = diff < 3 ? [0,1,2,3] : [0,1,2,3,4,5];
+        const type = randFrom(types);
+        if (type === 0) {
+          const h = diff < 2 ? randFrom([1,2,3,4,5]) : randFrom([1,2,3,4,5,6,7,8,10,12]);
+          question = `How many minutes in ${h} hour${h>1?"s":""}?`;
+          answer = h * 60;
+          working = `${h} hour${h>1?"s":""} × 60 = ${answer} minutes`;
+        } else if (type === 1) {
+          const m = randFrom([2,3,4,5,6,10]);
+          question = `How many seconds in ${m} minute${m>1?"s":""}?`;
+          answer = m * 60;
+          working = `${m} minute${m>1?"s":""} × 60 = ${answer} seconds`;
+        } else if (type === 2) {
+          const h = randFrom([1,2,3,4,5]);
+          const mins = h * 60;
+          question = `How many hours is ${mins} minutes?`;
+          answer = h;
+          working = `${mins} minutes ÷ 60 = ${h} hour${h>1?"s":""}`;
+        } else if (type === 3) {
+          const m = randFrom([2,3,4,5,6,10]);
+          const secs = m * 60;
+          question = `How many minutes is ${secs} seconds?`;
+          answer = m;
+          working = `${secs} seconds ÷ 60 = ${m} minute${m>1?"s":""}`;
+        } else if (type === 4) {
+          const h = randFrom([1,2,3]);
+          question = `How many seconds in ${h} hour${h>1?"s":""}?`;
+          answer = h * 3600;
+          working = `${h} hour${h>1?"s":""} × 60 = ${h*60} minutes, × 60 = ${answer} seconds`;
+        } else {
+          const halfOrQ = randFrom(["half","quarter"]);
+          if (halfOrQ === "half") {
+            question = "How many minutes in half an hour?";
+            answer = 30;
+            working = "1 hour = 60 minutes, half = 60 ÷ 2 = 30 minutes";
+          } else {
+            question = "How many minutes in a quarter of an hour?";
+            answer = 15;
+            working = "1 hour = 60 minutes, quarter = 60 ÷ 4 = 15 minutes";
+          }
+        }
+        setQ({ question, answer, working });
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, [difficulty]);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        if (val === q.answer) {
+          playSound("correct"); addStars(1);
+          const newStreak = streak + 1;
+          setStreak(newStreak);
+          if (newStreak > 0 && newStreak % 5 === 0) { setConfetti(c=>c+1); playSound("levelup"); setDifficulty(d=>Math.min(d+1,5)); }
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s => ({correct:s.correct+1, total:s.total+1}));
+        } else {
+          playSound("wrong"); setStreak(0);
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS), working:q.working });
+          setScore(s => ({...s, total:s.total+1}));
+        }
+      };
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)generate();else submit();} };
+
+      if (!q) return null;
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 50%, #3b82f6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={confetti} />
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Convert It! 🔄" />
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12, fontSize:14 }}>
+            <span>✅ {score.correct}/{score.total}</span>
+            <span>🔥 Streak: {streak}</span>
+          </div>
+
+          <div className="bounce-in" style={{ background:"rgba(255,255,255,0.12)", borderRadius:20, padding:24, textAlign:"center", marginBottom:16 }}>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:16, lineHeight:1.4 }}>{q.question}</div>
+            <div style={{ display:"flex", justifyContent:"center", gap:8, marginBottom:12 }}>
+              <span style={{ background:"rgba(255,255,255,0.15)", padding:"6px 12px", borderRadius:8, fontSize:13 }}>×60 to go bigger</span>
+              <span style={{ background:"rgba(255,255,255,0.15)", padding:"6px 12px", borderRadius:8, fontSize:13 }}>÷60 to go smaller</span>
+            </div>
+            <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+              placeholder="Your answer..." style={{ width:"100%", maxWidth:200, padding:"12px 16px", borderRadius:12, border:"2px solid rgba(255,255,255,0.3)",
+              background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:22, textAlign:"center", fontWeight:700, outline:"none" }} />
+          </div>
+
+          {!feedback && <div style={{ display:"flex", justifyContent:"center" }}>
+            <Btn onClick={submit} color="#10b981" big>Check Answer ✓</Btn>
+          </div>}
+
+          {feedback && <div className={feedback.correct?"bounce-in":"shake"} style={{
+            background: feedback.correct ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)",
+            borderRadius:16, padding:20, textAlign:"center", marginBottom:12
+          }}>
+            <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>{feedback.msg}</div>
+            {!feedback.correct && <div style={{ fontSize:14, opacity:0.9, marginBottom:8 }}>
+              The answer is <strong>{q.answer}</strong>
+            </div>}
+            {feedback.working && <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:10, padding:10, fontSize:13, marginBottom:8 }}>
+              {feedback.working}
+            </div>}
+            <Btn onClick={generate} color="#6366f1">Next Question →</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── TIME RIDDLES MODE ──────────────────────────────────────────
+    function RiddlesMode({ onBack, addStars }) {
+      const ALL_RIDDLES = [
+        { q: "A movie is 2 hours and 15 minutes long. How many minutes is that?", a: 135, working: "2 hours = 2 × 60 = 120 minutes, plus 15 = 135 minutes" },
+        { q: "You need to boil an egg for 360 seconds. How many minutes is that?", a: 6, working: "360 seconds ÷ 60 = 6 minutes" },
+        { q: "School starts at 8:00 and ends at 14:30. How many hours and minutes is that? (Answer in total minutes)", a: 390, working: "From 8:00 to 14:30 = 6 hours 30 minutes = 6 × 60 + 30 = 390 minutes" },
+        { q: "If you read for 20 minutes every day for a week, how many minutes total?", a: 140, working: "20 minutes × 7 days = 140 minutes" },
+        { q: "A song is 3 minutes and 45 seconds long. How many seconds total?", a: 225, working: "3 minutes = 3 × 60 = 180 seconds, plus 45 = 225 seconds" },
+        { q: "You have 90 minutes of homework. How many hours and minutes is that? (Answer the hours part only)", a: 1, working: "90 ÷ 60 = 1 hour and 30 minutes left over. The hours part is 1." },
+        { q: "3 friends each run for 4 minutes. How many minutes total?", a: 12, working: "3 × 4 = 12 minutes total" },
+        { q: "A plane journey is 180 minutes. How many hours is that?", a: 3, working: "180 minutes ÷ 60 = 3 hours" },
+        { q: "You sleep for 10 hours. How many minutes is that?", a: 600, working: "10 hours × 60 = 600 minutes" },
+        { q: "Break time is a quarter of an hour. How many minutes?", a: 15, working: "1 hour = 60 minutes, a quarter = 60 ÷ 4 = 15 minutes" },
+        { q: "It takes 300 seconds to walk to school. How many minutes?", a: 5, working: "300 seconds ÷ 60 = 5 minutes" },
+        { q: "A football match is 1 hour and 30 minutes. How many minutes total?", a: 90, working: "1 hour = 60 minutes, plus 30 = 90 minutes" },
+        { q: "You practise piano for half an hour every day for 5 days. How many minutes total?", a: 150, working: "Half an hour = 30 minutes. 30 × 5 = 150 minutes" },
+        { q: "A cartoon episode is 1,200 seconds long. How many minutes is that?", a: 20, working: "1,200 seconds ÷ 60 = 20 minutes" },
+        { q: "Lunch break starts at 12:15 and ends at 13:00. How many minutes is that?", a: 45, working: "From 12:15 to 13:00 = 45 minutes" },
+        { q: "You brush your teeth for 120 seconds. How many minutes is that?", a: 2, working: "120 seconds ÷ 60 = 2 minutes" },
+        { q: "A road trip takes 4 hours. How many minutes is that?", a: 240, working: "4 hours × 60 = 240 minutes" },
+        { q: "Your favourite TV show is 1,800 seconds. How many minutes is that?", a: 30, working: "1,800 seconds ÷ 60 = 30 minutes, that's half an hour!" },
+        { q: "Swimming practice lasts 2 hours and 30 minutes. How many minutes total?", a: 150, working: "2 hours = 120 minutes, plus 30 = 150 minutes" },
+        { q: "You wait 420 seconds for the bus. How many minutes is that?", a: 7, working: "420 seconds ÷ 60 = 7 minutes" },
+        { q: "A quarter of an hour plus half an hour is how many minutes?", a: 45, working: "Quarter hour = 15 min, half hour = 30 min, 15 + 30 = 45 minutes" },
+        { q: "How many seconds in 2 and a half minutes?", a: 150, working: "2.5 minutes × 60 = 150 seconds" },
+        { q: "You do 3 activities, each lasting 20 minutes. How many hours and minutes total? (Answer in minutes)", a: 60, working: "3 × 20 = 60 minutes = 1 hour" },
+        { q: "A race lasts 5 minutes and 30 seconds. How many seconds total?", a: 330, working: "5 minutes = 5 × 60 = 300 seconds, plus 30 = 330 seconds" },
+      ];
+
+      const [riddles] = useState(() => shuffle(ALL_RIDDLES));
+      const [idx, setIdx] = useState(0);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({ correct:0, total:0 });
+      const [streak, setStreak] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const inputRef = useRef();
+
+      const current = riddles[idx % riddles.length];
+
+      useEffect(() => { inputRef.current?.focus(); }, [idx]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        if (val === current.a) {
+          playSound("correct"); addStars(2);
+          const ns = streak+1;
+          setStreak(ns);
+          if (ns % 3 === 0) { setConfetti(c=>c+1); playSound("levelup"); }
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s => ({correct:s.correct+1, total:s.total+1}));
+        } else {
+          playSound("wrong"); setStreak(0);
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS) });
+          setScore(s => ({...s, total:s.total+1}));
+        }
+      };
+      const next = () => { setIdx(i=>i+1); setInput(""); setFeedback(null); setTimeout(()=>inputRef.current?.focus(),50); };
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)next();else submit();} };
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #3b0764 0%, #6d28d9 50%, #8b5cf6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={confetti} />
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Time Riddles 🧩" />
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12, fontSize:14 }}>
+            <span>✅ {score.correct}/{score.total}</span>
+            <span>🔥 Streak: {streak}</span>
+            <span>Riddle #{(idx % riddles.length)+1}</span>
+          </div>
+
+          <div className="bounce-in" style={{ background:"rgba(255,255,255,0.12)", borderRadius:20, padding:24, textAlign:"center", marginBottom:16 }}>
+            <div style={{ fontSize:36, marginBottom:10 }}>🧩</div>
+            <div style={{ fontSize:17, fontWeight:700, marginBottom:20, lineHeight:1.5 }}>{current.q}</div>
+            <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+              placeholder="Your answer..." disabled={!!feedback} style={{ width:"100%", maxWidth:200, padding:"12px 16px", borderRadius:12,
+              border:"2px solid rgba(255,255,255,0.3)", background:"rgba(255,255,255,0.15)", color:"#fff",
+              fontSize:22, textAlign:"center", fontWeight:700, outline:"none" }} />
+          </div>
+
+          {!feedback && <div style={{ display:"flex", justifyContent:"center" }}>
+            <Btn onClick={submit} color="#10b981" big>Check Answer ✓</Btn>
+          </div>}
+
+          {feedback && <div className={feedback.correct?"bounce-in":"shake"} style={{
+            background: feedback.correct ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)",
+            borderRadius:16, padding:20, textAlign:"center", marginBottom:12
+          }}>
+            <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>{feedback.msg}</div>
+            {!feedback.correct && <div style={{ fontSize:15, marginBottom:4 }}>The answer is <strong>{current.a}</strong></div>}
+            <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:10, padding:12, fontSize:14, marginTop:8, marginBottom:10, lineHeight:1.5 }}>
+              <strong>Working:</strong> {current.working}
+            </div>
+            <Btn onClick={next} color="#6366f1">Next Riddle →</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── SPEED ROUND MODE ───────────────────────────────────────────
+    function SpeedMode({ onBack, addStars }) {
+      const [phase, setPhase] = useState("ready");
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [score, setScore] = useState(0);
+      const [feedback, setFeedback] = useState(null);
+      const [confetti, setConfetti] = useState(0);
+      const inputRef = useRef();
+      const timerRef = useRef();
+
+      const genQ = useCallback(() => {
+        const type = Math.floor(Math.random()*6);
+        let question, answer;
+        if (type === 0) {
+          const h = randFrom([1,2,3,4,5,6]);
+          question = `${h} hour${h>1?"s":""} = ? minutes`;
+          answer = h*60;
+        } else if (type === 1) {
+          const m = randFrom([2,3,4,5,10]);
+          question = `${m} minute${m>1?"s":""} = ? seconds`;
+          answer = m*60;
+        } else if (type === 2) {
+          const h = randFrom([1,2,3,4,5]);
+          question = `${h*60} minutes = ? hours`;
+          answer = h;
+        } else if (type === 3) {
+          const m = randFrom([2,3,4,5,6]);
+          question = `${m*60} seconds = ? minutes`;
+          answer = m;
+        } else if (type === 4) {
+          question = "Half an hour = ? minutes";
+          answer = 30;
+        } else {
+          question = "Quarter hour = ? minutes";
+          answer = 15;
+        }
+        setQ({ question, answer });
+        setInput("");
+        setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 30);
+      }, []);
+
+      const start = () => {
+        setPhase("playing"); setScore(0); setTimeLeft(60);
+        genQ();
+        timerRef.current = setInterval(() => {
+          setTimeLeft(t => {
+            if (t <= 1) { clearInterval(timerRef.current); setPhase("done"); return 0; }
+            if (t <= 6) playSound("tick");
+            return t-1;
+          });
+        }, 1000);
+      };
+
+      useEffect(() => { return () => clearInterval(timerRef.current); }, []);
+
+      const submit = () => {
+        if (!input || !q) return;
+        const val = parseInt(input);
+        if (val === q.answer) {
+          playSound("correct");
+          setScore(s => s+1);
+          setFeedback({ correct:true });
+          setTimeout(() => genQ(), 300);
+        } else {
+          playSound("wrong");
+          setFeedback({ correct:false });
+          setTimeout(() => { setFeedback(null); setInput(""); inputRef.current?.focus(); }, 400);
+        }
+      };
+      const handleKey = (e) => { if(e.key==="Enter") submit(); };
+
+      useEffect(() => {
+        if (phase === "done") {
+          const stars = Math.max(1, Math.floor(score/2));
+          addStars(stars);
+          if (score >= 10) { setConfetti(c=>c+1); playSound("levelup"); }
+        }
+      }, [phase]);
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #7f1d1d 0%, #dc2626 50%, #ef4444 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={confetti} />
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Speed Round ⚡" />
+
+          {phase === "ready" && <div style={{ textAlign:"center", marginTop:40 }}>
+            <div style={{ fontSize:64 }} className="float">⚡</div>
+            <h2 style={{ margin:"16px 0" }}>60-Second Challenge!</h2>
+            <p style={{ opacity:0.8, marginBottom:24 }}>Convert between hours, minutes and seconds as fast as you can!</p>
+            <Btn onClick={start} color="#f59e0b" big>Start! 🚀</Btn>
+          </div>}
+
+          {phase === "playing" && <>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16, fontSize:16, fontWeight:700 }}>
+              <span>⏱️ {timeLeft}s</span>
+              <span>✅ {score}</span>
+            </div>
+            <div style={{ background: timeLeft<=10?"rgba(255,255,0,0.15)":"rgba(255,255,255,0.12)", borderRadius:20, padding:24, textAlign:"center",
+              transition:"background 0.3s" }}>
+              <div style={{ fontSize:22, fontWeight:700, marginBottom:16 }} className={feedback?.correct===false?"shake":""}>{q?.question}</div>
+              <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+                style={{ width:"100%", maxWidth:180, padding:"12px 16px", borderRadius:12, border:"2px solid rgba(255,255,255,0.3)",
+                background: feedback ? (feedback.correct ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)") : "rgba(255,255,255,0.15)",
+                color:"#fff", fontSize:24, textAlign:"center", fontWeight:700, outline:"none", transition:"background 0.2s" }} />
+              <div style={{ marginTop:12 }}>
+                <Btn onClick={submit} color="#10b981">Go! ✓</Btn>
+              </div>
+            </div>
+          </>}
+
+          {phase === "done" && <div style={{ textAlign:"center", marginTop:30 }} className="bounce-in">
+            <div style={{ fontSize:64 }}>🏁</div>
+            <h2 style={{ margin:"16px 0" }}>Time's Up!</h2>
+            <div style={{ fontSize:48, fontWeight:800, marginBottom:8 }}>{score}</div>
+            <div style={{ fontSize:16, opacity:0.9, marginBottom:6 }}>correct answers</div>
+            <div style={{ fontSize:14, opacity:0.8, marginBottom:24 }}>
+              {score >= 15 ? "Incredible speed! 🏆" : score >= 10 ? "Amazing work! 🌟" : score >= 5 ? "Great effort! 💪" : "Keep practising! 🚀"}
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <Btn onClick={start} color="#f59e0b" big>Try Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1">Back 🏠</Btn>
+            </div>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── TIME BUILDER MODE ──────────────────────────────────────────
+    function BuilderMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [inputH, setInputH] = useState("");
+      const [inputM, setInputM] = useState("");
+      const [inputTotal, setInputTotal] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({ correct:0, total:0 });
+      const [streak, setStreak] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const type = Math.floor(Math.random()*2);
+        if (type === 0) {
+          // Given hours and minutes, find total minutes
+          const h = randFrom([1,2,3,4,5]);
+          const m = randFrom([5,10,15,20,25,30,35,40,45,50,55]);
+          setQ({ type:"toTotal", hours:h, minutes:m, answer: h*60+m });
+        } else {
+          // Given total minutes, find hours and minutes
+          const h = randFrom([1,2,3,4]);
+          const m = randFrom([5,10,15,20,25,30,35,40,45,50,55]);
+          setQ({ type:"split", totalMinutes: h*60+m, answerH: h, answerM: m });
+        }
+        setInputH(""); setInputM(""); setInputTotal(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        let correct = false;
+        if (q.type === "toTotal") {
+          correct = parseInt(inputTotal) === q.answer;
+        } else {
+          correct = parseInt(inputH) === q.answerH && parseInt(inputM) === q.answerM;
+        }
+        if (correct) {
+          playSound("correct"); addStars(1);
+          const ns = streak+1; setStreak(ns);
+          if (ns % 5 === 0) { setConfetti(c=>c+1); playSound("levelup"); }
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s => ({correct:s.correct+1, total:s.total+1}));
+        } else {
+          playSound("wrong"); setStreak(0);
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS) });
+          setScore(s => ({...s, total:s.total+1}));
+        }
+      };
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)generate();else submit();} };
+
+      if (!q) return null;
+
+      const renderBlocks = (hours, minutes) => {
+        return <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center", marginBottom:16 }}>
+          {Array.from({length:hours},(_,i) => <div key={"h"+i} style={{
+            width:50, height:50, borderRadius:12, background:"#f59e0b", display:"flex",
+            alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:14, color:"#fff",
+            boxShadow:"0 2px 8px rgba(245,158,11,0.3)"
+          }} className="pop-in" style2={{animationDelay:`${i*0.05}s`}}>1h</div>)}
+          {Array.from({length:Math.min(minutes,20)},(_,i) => <div key={"m"+i} style={{
+            width:18, height:18, borderRadius:9, background:"#3b82f6",
+            boxShadow:"0 2px 4px rgba(59,130,246,0.3)"
+          }} className="pop-in" />)}
+          {minutes > 20 && <div style={{ fontSize:13, fontWeight:700, color:"#93c5fd", display:"flex", alignItems:"center" }}>+{minutes-20} more</div>}
+        </div>;
+      };
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #78350f 0%, #d97706 50%, #f59e0b 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={confetti} />
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Time Builder ⏳" />
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12, fontSize:14 }}>
+            <span>✅ {score.correct}/{score.total}</span>
+            <span>🔥 Streak: {streak}</span>
+          </div>
+
+          <div className="bounce-in" style={{ background:"rgba(255,255,255,0.12)", borderRadius:20, padding:24, textAlign:"center", marginBottom:16 }}>
+            {q.type === "toTotal" && <>
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:12 }}>
+                How many total minutes is this?
+              </div>
+              <div style={{ display:"flex", justifyContent:"center", gap:12, marginBottom:16 }}>
+                <ClockFace hours={q.hours} minutes={q.minutes} size={140} />
+              </div>
+              <div style={{ fontSize:22, fontWeight:800, marginBottom:8 }}>
+                {q.hours} hour{q.hours>1?"s":""} and {q.minutes} minutes
+              </div>
+              {renderBlocks(q.hours, q.minutes)}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, marginBottom:4 }}>
+                <span style={{ background:"#f59e0b", width:16, height:16, borderRadius:4, display:"inline-block" }}></span>
+                <span style={{ fontSize:12 }}>= 1 hour (60 min)</span>
+                <span style={{ background:"#3b82f6", width:12, height:12, borderRadius:6, display:"inline-block", marginLeft:8 }}></span>
+                <span style={{ fontSize:12 }}>= 1 minute</span>
+              </div>
+              <div style={{ marginTop:12 }}>
+                <input ref={inputRef} type="number" value={inputTotal} onChange={e=>setInputTotal(e.target.value)} onKeyDown={handleKey}
+                  placeholder="Total minutes" disabled={!!feedback}
+                  style={{ width:160, padding:"12px 16px", borderRadius:12, border:"2px solid rgba(255,255,255,0.3)",
+                  background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:22, textAlign:"center", fontWeight:700, outline:"none" }} />
+              </div>
+            </>}
+
+            {q.type === "split" && <>
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:12 }}>
+                Break this down into hours and minutes:
+              </div>
+              <div style={{ fontSize:36, fontWeight:800, marginBottom:8 }}>
+                {q.totalMinutes} minutes
+              </div>
+              <div style={{ fontSize:14, opacity:0.8, marginBottom:16 }}>
+                Hint: How many times does 60 go into {q.totalMinutes}?
+              </div>
+              <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"center" }}>
+                <div>
+                  <input ref={inputRef} type="number" value={inputH} onChange={e=>setInputH(e.target.value)} onKeyDown={handleKey}
+                    placeholder="?" disabled={!!feedback}
+                    style={{ width:70, padding:"12px", borderRadius:12, border:"2px solid rgba(255,255,255,0.3)",
+                    background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:22, textAlign:"center", fontWeight:700, outline:"none" }} />
+                  <div style={{ fontSize:11, marginTop:4 }}>hours</div>
+                </div>
+                <span style={{ fontSize:24, fontWeight:700 }}>:</span>
+                <div>
+                  <input type="number" value={inputM} onChange={e=>setInputM(e.target.value)} onKeyDown={handleKey}
+                    placeholder="?" disabled={!!feedback}
+                    style={{ width:70, padding:"12px", borderRadius:12, border:"2px solid rgba(255,255,255,0.3)",
+                    background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:22, textAlign:"center", fontWeight:700, outline:"none" }} />
+                  <div style={{ fontSize:11, marginTop:4 }}>minutes</div>
+                </div>
+              </div>
+            </>}
+          </div>
+
+          {!feedback && <div style={{ display:"flex", justifyContent:"center" }}>
+            <Btn onClick={submit} color="#10b981" big>Check Answer ✓</Btn>
+          </div>}
+
+          {feedback && <div className={feedback.correct?"bounce-in":"shake"} style={{
+            background: feedback.correct ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)",
+            borderRadius:16, padding:20, textAlign:"center", marginBottom:12
+          }}>
+            <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>{feedback.msg}</div>
+            {!feedback.correct && q.type === "toTotal" && <div style={{ fontSize:14, marginBottom:8 }}>
+              <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:10, padding:10 }}>
+                {q.hours} hour{q.hours>1?"s":""} = {q.hours} × 60 = {q.hours*60} minutes<br/>
+                Plus {q.minutes} = <strong>{q.answer} minutes</strong>
+              </div>
+            </div>}
+            {!feedback.correct && q.type === "split" && <div style={{ fontSize:14, marginBottom:8 }}>
+              <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:10, padding:10 }}>
+                {q.totalMinutes} ÷ 60 = {q.answerH} remainder {q.answerM}<br/>
+                = <strong>{q.answerH} hour{q.answerH>1?"s":""} and {q.answerM} minutes</strong>
+              </div>
+            </div>}
+            <Btn onClick={generate} color="#6366f1">Next Question →</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── APP ROOT ───────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(() => {
+        try { return parseInt(localStorage.getItem("time_stars")) || 0; } catch(e) { return 0; }
+      });
+
+      const addStars = (n) => {
+        setTotalStars(s => {
+          const next = s + n;
+          try { localStorage.setItem("time_stars", next); } catch(e) {}
+          return next;
+        });
+      };
+
+      if (screen === "learn") return <LearnMode onBack={() => setScreen("home")} />;
+      if (screen === "convert") return <ConvertMode onBack={() => setScreen("home")} addStars={addStars} />;
+      if (screen === "riddles") return <RiddlesMode onBack={() => setScreen("home")} addStars={addStars} />;
+      if (screen === "speed") return <SpeedMode onBack={() => setScreen("home")} addStars={addStars} />;
+      if (screen === "builder") return <BuilderMode onBack={() => setScreen("home")} addStars={addStars} />;
+      return <Home onNav={setScreen} totalStars={totalStars} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
