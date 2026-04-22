@@ -933,8 +933,8 @@
 
     // ─── EXPLORER MODE ──────────────────────────────────────────────
     function ExplorerMode({ onBack }) {
-      const [highlight, setHighlight] = useState(null); // { row, col } or null
-      const [showSwap, setShowSwap] = useState(false);
+      const [highlight, setHighlight] = useState(null);
+      const [showMirror, setShowMirror] = useState(false);
 
       const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -944,18 +944,18 @@
             <BackBar onBack={onBack} title="Times Table Map" />
 
             <div style={{ textAlign: "center", fontSize: 13, opacity: 0.8, marginBottom: 12 }}>
-              Tap any cell to highlight its row and column!
+              Tap any cell to see its swap partner!
             </div>
 
             <div style={{ overflowX: "auto", marginBottom: 16 }}>
               <table style={{ borderCollapse: "collapse", margin: "0 auto", background: "rgba(255,255,255,0.1)", borderRadius: 14 }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#fbbf24" }}>×</th>
+                    <th style={{ padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#fbbf24" }}>{"×"}</th>
                     {nums.map(n => (
                       <th key={n} style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700,
-                        background: highlight?.col === n ? "rgba(251,191,36,0.3)" : "transparent",
-                        color: highlight?.col === n ? "#fbbf24" : "#fff",
+                        background: highlight?.col === n || highlight?.row === n ? "rgba(251,191,36,0.3)" : "transparent",
+                        color: highlight?.col === n || highlight?.row === n ? "#fbbf24" : "#fff",
                         borderRadius: n === 1 ? "10px 0 0 0" : n === 10 ? "0 10px 0 0" : 0,
                       }}>{n}</th>
                     ))}
@@ -965,22 +965,33 @@
                   {nums.map(row => (
                     <tr key={row}>
                       <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700,
-                        background: highlight?.row === row ? "rgba(251,191,36,0.3)" : "transparent",
-                        color: highlight?.row === row ? "#fbbf24" : "#fff",
+                        background: highlight?.row === row || highlight?.col === row ? "rgba(251,191,36,0.3)" : "transparent",
+                        color: highlight?.row === row || highlight?.col === row ? "#fbbf24" : "#fff",
                       }}>{row}</td>
                       {nums.map(col => {
                         const val = row * col;
-                        const isHighlighted = highlight && (highlight.row === row || highlight.col === col);
                         const isSelected = highlight && highlight.row === row && highlight.col === col;
-                        const isSwapCell = showSwap && highlight && highlight.row === col && highlight.col === row;
+                        const isSwapCell = highlight && highlight.row === col && highlight.col === row && !(highlight.row === highlight.col);
+                        const isHighlighted = highlight && (highlight.row === row || highlight.col === col);
+                        const isDiagonal = row === col;
+                        const isSwapHighlighted = highlight && (highlight.row === col || highlight.col === row) && !isHighlighted;
                         return (
-                          <td key={col} onClick={() => setHighlight(highlight?.row === row && highlight?.col === col ? null : { row, col })}
+                          <td key={col} onClick={() => { playSound("click"); setHighlight(isSelected ? null : { row, col }); }}
                             style={{
-                              padding: "8px 10px", fontSize: 13, fontWeight: 600, textAlign: "center",
+                              padding: "8px 10px", fontSize: 13, textAlign: "center",
                               cursor: "pointer", transition: "all 0.15s",
-                              background: isSelected ? "#fbbf24" : isSwapCell ? "#f97316" : isHighlighted ? "rgba(251,191,36,0.15)" : "transparent",
-                              color: isSelected ? "#1e293b" : isSwapCell ? "#fff" : isHighlighted ? "#fbbf24" : "rgba(255,255,255,0.8)",
-                              borderRadius: isSelected ? 8 : 0,
+                              background: isSelected ? "#fbbf24"
+                                : isSwapCell ? "#f97316"
+                                : isHighlighted ? "rgba(251,191,36,0.15)"
+                                : isSwapHighlighted ? "rgba(249,115,22,0.1)"
+                                : showMirror && isDiagonal ? "rgba(255,255,255,0.15)"
+                                : "transparent",
+                              color: isSelected ? "#1e293b"
+                                : isSwapCell ? "#fff"
+                                : isHighlighted ? "#fbbf24"
+                                : isSwapHighlighted ? "#f97316"
+                                : "rgba(255,255,255,0.8)",
+                              borderRadius: isSelected || isSwapCell ? 8 : 0,
                               fontWeight: isSelected || isSwapCell ? 800 : 600,
                             }}>
                             {val}
@@ -995,33 +1006,41 @@
 
             {highlight && (
               <div className="slide-up" style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", marginBottom: 4 }}>
-                  {highlight.row} × {highlight.col} = {highlight.row * highlight.col}
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ background: "#fbbf24", color: "#1e293b", borderRadius: 12, padding: "12px 18px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, opacity: 0.7 }}>You tapped</div>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>{highlight.row} × {highlight.col} = {highlight.row * highlight.col}</div>
+                  </div>
+                  <div style={{ fontSize: 28 }}>{"="}</div>
+                  <div style={{ background: "#f97316", color: "#fff", borderRadius: 12, padding: "12px 18px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, opacity: 0.8 }}>Swap partner</div>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>{highlight.col} × {highlight.row} = {highlight.row * highlight.col}</div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 14, opacity: 0.8 }}>
-                  {"\ud83d\udd04"} Same as {highlight.col} × {highlight.row} = {highlight.row * highlight.col}
+                <div style={{ fontSize: 13, marginTop: 10, opacity: 0.8 }}>
+                  Same answer! The order doesn't matter!
                 </div>
                 {MEMORY_HINTS[`${highlight.row}x${highlight.col}`] && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: "#fbbf24" }}>
-                    {"\ud83d\udca1"} {MEMORY_HINTS[`${highlight.row}x${highlight.col}`].hint}
+                  <div style={{ marginTop: 8, fontSize: 13, background: "rgba(251,191,36,0.2)", padding: "8px 12px", borderRadius: 10, color: "#fbbf24" }}>
+                    {"💡"} {MEMORY_HINTS[`${highlight.row}x${highlight.col}`].hint}
                   </div>
                 )}
               </div>
             )}
 
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button onClick={() => { playSound("click"); setShowSwap(!showSwap); }}
+              <button onClick={() => { playSound("click"); setShowMirror(!showMirror); }}
                 style={{
-                  flex: 1, padding: "12px", borderRadius: 12, border: showSwap ? "2px solid #f97316" : "2px solid rgba(255,255,255,0.2)",
-                  background: showSwap ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.08)",
+                  flex: 1, padding: "12px", borderRadius: 12, border: showMirror ? "2px solid #fbbf24" : "2px solid rgba(255,255,255,0.2)",
+                  background: showMirror ? "rgba(251,191,36,0.15)" : "rgba(255,255,255,0.08)",
                   color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13,
                 }}>
-                {"\ud83d\udd04"} {showSwap ? "Hide" : "Show"} Swap Partner
+                {"🪞"} {showMirror ? "Hide" : "Show"} Mirror Line
               </button>
             </div>
 
             <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 14, padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"\ud83c\udf1f"} Did you notice?</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"🌟"} Did you notice?</div>
               <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>
                 The table is a <strong>mirror</strong>! Draw a diagonal line from top-left to bottom-right — the numbers on each side are identical. That's because <strong>3×7 always equals 7×3</strong>. So you only need to learn half the table!
               </div>
