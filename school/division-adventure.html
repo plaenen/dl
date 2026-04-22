@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Division Adventure!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes popIn { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    @keyframes fadeSlide { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes confettiFall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    @keyframes rainbow { 0% { color: #ef4444; } 16% { color: #f97316; } 33% { color: #eab308; } 50% { color: #22c55e; } 66% { color: #3b82f6; } 83% { color: #8b5cf6; } 100% { color: #ef4444; } }
+    .bounce-in { animation: bounceIn 0.5s ease-out; }
+    .shake { animation: shake 0.4s ease-out; }
+    .float { animation: float 3s ease-in-out infinite; }
+    .pop-in { animation: popIn 0.3s ease-out both; }
+    .fade-slide { animation: fadeSlide 0.4s ease-out both; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .rainbow { animation: rainbow 3s linear infinite; }
+    .confetti-piece { position: fixed; top: -20px; animation: confettiFall 3s ease-in forwards; pointer-events: none; z-index: 9999; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const TABLES = [2, 3, 4, 5, 6, 7, 8, 9];
+    const FRUIT = ["🍎","🍊","🍋","🍐","🫐","🍇","🍓","🍒","🥝","🍑"];
+
+    const ANIMALS = {
+      2: { emoji: "🐼", name: "Panda" },
+      3: { emoji: "🐬", name: "Dolphin" },
+      4: { emoji: "🐯", name: "Tiger" },
+      5: { emoji: "🐧", name: "Penguin" },
+      6: { emoji: "🦉", name: "Owl" },
+      7: { emoji: "🦊", name: "Fox" },
+      8: { emoji: "🐙", name: "Octopus" },
+      9: { emoji: "🐉", name: "Dragon" },
+    };
+
+    const COLORS = {
+      2: "#3b82f6", 3: "#0ea5e9", 4: "#f97316", 5: "#6366f1",
+      6: "#8b5cf6", 7: "#d97706", 8: "#ec4899", 9: "#10b981",
+    };
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Wow! 🚀",
+      "Perfect! 🎯","On fire! 🔥","Legend! 🏆","Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type==="correct") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.1); osc.frequency.setValueAtTime(784,ctx.currentTime+0.2); gain.gain.setValueAtTime(0,ctx.currentTime+0.35); osc.stop(ctx.currentTime+0.35); }
+        else if (type==="wrong") { osc.frequency.value=200; osc.type="sawtooth"; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.3); osc.stop(ctx.currentTime+0.3); }
+        else if (type==="levelup") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.15); osc.frequency.setValueAtTime(784,ctx.currentTime+0.3); osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45); gain.gain.setValueAtTime(0,ctx.currentTime+0.7); osc.stop(ctx.currentTime+0.7); }
+        else if (type==="click") { osc.frequency.value=800; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.06); osc.stop(ctx.currentTime+0.06); }
+      } catch(e) {}
+    }
+
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        setPieces(Array.from({length:25},(_,i) => ({ id:Date.now()+i, left:Math.random()*100, delay:Math.random()*0.5, emoji:randFrom(["🌟","⭐","🎉","🎊","✨","💖","🦋","🌈"]) })));
+        const t = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(t);
+      }, [active]);
+      return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left:`${p.left}%`, animationDelay:`${p.delay}s` }}>{p.emoji}</div>)}</>;
+    }
+
+    function Btn({ children, onClick, color="#3b82f6", big, disabled, active, style:s }) {
+      return <button onClick={() => { if(!disabled){playSound("click");onClick?.();}}} disabled={disabled} style={{
+        padding: big?"16px 32px":"10px 20px", borderRadius:14,
+        border: active ? "3px solid #fff" : "3px solid transparent",
+        background: disabled?"#cbd5e1":color, color:"#fff", fontWeight:700,
+        fontSize: big?18:14, cursor: disabled?"default":"pointer",
+        boxShadow: disabled?"none":`0 4px 14px ${color}44`, transition:"all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function BackBar({ onBack, title }) {
+      return <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", marginBottom:12 }}>
+        <button onClick={() => {playSound("click");onBack();}} style={{
+          width:36,height:36,borderRadius:10,border:"none",background:"rgba(255,255,255,0.15)",
+          color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+        }}>{"←"}</button>
+        <span style={{ fontWeight:700, fontSize:18, color:"#fff" }}>{title}</span>
+      </div>;
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    function Home({ onNav, totalStars }) {
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)", padding:"30px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ fontSize:56, marginBottom:8 }} className="float">{"➗"}</div>
+          <h1 style={{ fontSize:30, fontWeight:800, marginBottom:4 }}>
+            <span className="rainbow">Division Adventure!</span>
+          </h1>
+          <p style={{ fontSize:14, opacity:0.8, marginBottom:8 }}>Master division by connecting it to multiplication</p>
+          <div style={{ fontSize:16, fontWeight:700, marginBottom:28 }}>{"⭐"} {totalStars} stars collected</div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, textAlign:"left" }}>
+            <ModeCard emoji="🎒" title="Share It Out" desc="See the fruit being shared — then answer!"
+              color="#10b981" onClick={() => onNav("share")} />
+            <ModeCard emoji="🔄" title="Flip It!" desc="See a multiplication, answer the division — they're the same thing!"
+              color="#3b82f6" onClick={() => onNav("flip")} />
+            <ModeCard emoji="🎯" title="Division Quiz" desc="Pick your tables and practise dividing!"
+              color="#f59e0b" onClick={() => onNav("quiz")} />
+            <ModeCard emoji="⚡" title="Speed Divide" desc="60 seconds — how many divisions can you crack?"
+              color="#ef4444" onClick={() => onNav("speed")} />
+            <ModeCard emoji="🧩" title="Missing Number" desc="Find the missing piece: _ ÷ 3 = 7 or 24 ÷ _ = 6"
+              color="#8b5cf6" onClick={() => onNav("missing")} />
+            <ModeCard emoji="🎒" title="Remainders" desc="What's left over? Learn division with remainders!"
+              color="#ec4899" onClick={() => onNav("remainder")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    function ModeCard({ emoji, title, desc, color, onClick }) {
+      return <button onClick={() => {playSound("click");onClick();}} style={{
+        display:"flex", alignItems:"center", gap:14, padding:"16px 18px", borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.07)",
+        color:"#fff", cursor:"pointer", textAlign:"left", transition:"all 0.2s",
+      }}>
+        <div style={{ width:50,height:50,borderRadius:14,background:color,display:"flex",
+          alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0 }}>{emoji}</div>
+        <div>
+          <div style={{ fontWeight:700, fontSize:16, marginBottom:2 }}>{title}</div>
+          <div style={{ fontSize:12, opacity:0.7 }}>{desc}</div>
+        </div>
+      </button>;
+    }
+
+    // ─── SHARE IT OUT ───────────────────────────────────────────────
+    function ShareMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({ correct:0, total:0 });
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const divisor = randFrom([2,3,4,5,6]);
+        const answer = Math.floor(Math.random()*9) + 2;
+        const total = divisor * answer;
+        const fruit = FRUIT[Math.floor(Math.random()*FRUIT.length)];
+        setQ({ total, divisor, answer, fruit });
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        if (val === q.answer) {
+          playSound("correct"); addStars(1);
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s => ({correct:s.correct+1, total:s.total+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS) });
+          setScore(s => ({...s, total:s.total+1}));
+        }
+      };
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)generate();else submit();} };
+
+      if (!q) return null;
+
+      // Build visual groups
+      const groups = Array.from({length:q.divisor}, (_,i) =>
+        Array.from({length:q.answer}, (_,j) => j)
+      );
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Share It Out" />
+          <div style={{ textAlign:"center", fontSize:13, opacity:0.7, marginBottom:8 }}>{score.correct}/{score.total} correct</div>
+
+          <div style={{ background:"#fff", borderRadius:24, padding:"24px 20px", color:"#1e293b", marginBottom:16, boxShadow:"0 8px 32px rgba(0,0,0,0.15)" }}>
+            {/* Show all fruit */}
+            <div style={{ textAlign:"center", marginBottom:12 }}>
+              <div style={{ fontSize:14, color:"#64748b", marginBottom:6 }}>You have {q.total} {q.fruit} to share between {q.divisor} friends:</div>
+              <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:4, marginBottom:12 }}>
+                {Array.from({length:q.total}, (_,i) => (
+                  <span key={i} className="pop-in" style={{ fontSize:q.total > 30 ? 16 : 22, animationDelay:`${i*20}ms` }}>{q.fruit}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Show bags */}
+            {!feedback && (
+              <div style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginBottom:16 }}>
+                {Array.from({length:q.divisor}, (_,i) => (
+                  <div key={i} style={{ background:"#f1f5f9", borderRadius:12, padding:"8px 12px", textAlign:"center", minWidth:50 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600 }}>Friend {i+1}</div>
+                    <div style={{ fontSize:24 }}>{"🎒"}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:"#64748b" }}>?</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Show filled bags after answer */}
+            {feedback && (
+              <div className="fade-slide" style={{ display:"flex", justifyContent:"center", gap:8, flexWrap:"wrap", marginBottom:16 }}>
+                {groups.map((g, i) => (
+                  <div key={i} style={{ background: feedback.correct ? "#f0fdf4" : "#fef2f2", borderRadius:12, padding:"8px 10px", textAlign:"center", minWidth:50 }}>
+                    <div style={{ fontSize:10, color:"#94a3b8", fontWeight:600 }}>Friend {i+1}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:2, marginTop:4 }}>
+                      {g.map((_, j) => <span key={j} style={{ fontSize:q.answer > 6 ? 14 : 18 }}>{q.fruit}</span>)}
+                    </div>
+                    <div style={{ fontSize:14, fontWeight:800, color: feedback.correct ? "#10b981" : "#ef4444", marginTop:4 }}>{q.answer}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Question */}
+            <div style={{ textAlign:"center", fontSize:28, fontWeight:800, marginBottom:16 }}>
+              {q.total} ÷ {q.divisor} = ?
+            </div>
+
+            {!feedback && (
+              <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                <input ref={inputRef} type="number" value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100, padding:"12px", fontSize:28, fontWeight:800, textAlign:"center",
+                    borderRadius:14, border:"3px solid #10b981", outline:"none", color:"#1e293b",
+                  }} />
+                <Btn onClick={submit} color="#10b981" big disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && (
+              <div className={feedback.correct ? "bounce-in" : "shake"} style={{ textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:800, color: feedback.correct ? "#10b981" : "#ef4444", marginBottom:4 }}>
+                  {feedback.msg}
+                </div>
+                {!feedback.correct && (
+                  <div style={{ fontSize:14, color:"#64748b", marginBottom:4 }}>
+                    The answer is <strong style={{ fontSize:20 }}>{q.answer}</strong><br/>
+                    <span style={{ color:"#3b82f6" }}>Because {q.divisor} × {q.answer} = {q.total}</span>
+                  </div>
+                )}
+                {feedback.correct && (
+                  <div style={{ fontSize:13, color:"#64748b" }}>
+                    Each friend gets {q.answer}! Because {q.divisor} × {q.answer} = {q.total} ✓
+                  </div>
+                )}
+                <div style={{ marginTop:12 }}>
+                  <Btn onClick={generate} color="#10b981" big>Next! →</Btn>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── FLIP IT ────────────────────────────────────────────────────
+    function FlipMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [phase, setPhase] = useState("mult"); // mult, div1, div2, done
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState(0);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const a = randFrom(TABLES);
+        const b = Math.floor(Math.random()*10)+1;
+        setQ({ a, b, product: a*b });
+        setPhase("mult"); setInput(""); setFeedback(null);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const currentQuestion = () => {
+        if (!q) return null;
+        if (phase === "mult") return { text: `${q.a} × ${q.b} = ?`, answer: q.product, hint: "Multiply!" };
+        if (phase === "div1") return { text: `${q.product} ÷ ${q.a} = ?`, answer: q.b, hint: `Flip: ${q.a} × ? = ${q.product}` };
+        if (phase === "div2") return { text: `${q.product} ÷ ${q.b} = ?`, answer: q.a, hint: `Flip: ${q.b} × ? = ${q.product}` };
+        return null;
+      };
+
+      const cq = currentQuestion();
+
+      const submit = () => {
+        if (!input || !cq) return;
+        if (parseInt(input) === cq.answer) {
+          playSound("correct"); addStars(1);
+          setFeedback({ correct: true });
+          setScore(s => s+1);
+        } else {
+          playSound("wrong");
+          setFeedback({ correct: false, answer: cq.answer });
+        }
+      };
+
+      const next = () => {
+        if (phase === "mult") { setPhase("div1"); setInput(""); setFeedback(null); setTimeout(() => inputRef.current?.focus(), 50); }
+        else if (phase === "div1") { setPhase("div2"); setInput(""); setFeedback(null); setTimeout(() => inputRef.current?.focus(), 50); }
+        else { generate(); setTimeout(() => inputRef.current?.focus(), 50); }
+      };
+
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)next();else submit();} };
+
+      if (!q || !cq) return null;
+
+      const stepNum = phase === "mult" ? 1 : phase === "div1" ? 2 : 3;
+      const animal = ANIMALS[q.a];
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e3a5f 0%, #1e40af 50%, #3b82f6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Flip It!" />
+
+          {/* Progress dots */}
+          <div style={{ display:"flex", justifyContent:"center", gap:8, marginBottom:16 }}>
+            {[1,2,3].map(s => (
+              <div key={s} style={{
+                width:12, height:12, borderRadius:"50%",
+                background: s < stepNum ? "#4ade80" : s === stepNum ? "#fbbf24" : "rgba(255,255,255,0.2)",
+                transition:"all 0.3s",
+              }} />
+            ))}
+            <span style={{ fontSize:12, opacity:0.6, marginLeft:4 }}>Step {stepNum}/3</span>
+          </div>
+
+          {/* Fact family triangle */}
+          <div style={{ textAlign:"center", marginBottom:12 }}>
+            <div style={{ display:"inline-flex", gap:8, alignItems:"center", background:"rgba(255,255,255,0.1)", borderRadius:12, padding:"8px 16px" }}>
+              <span style={{ fontSize:18, fontWeight:800, color:"#93c5fd" }}>{q.a}</span>
+              <span style={{ fontSize:14, opacity:0.5 }}>×</span>
+              <span style={{ fontSize:18, fontWeight:800, color:"#fbbf24" }}>{q.b}</span>
+              <span style={{ fontSize:14, opacity:0.5 }}>=</span>
+              <span style={{ fontSize:18, fontWeight:800, color:"#4ade80" }}>{phase === "mult" && !feedback ? "?" : q.product}</span>
+            </div>
+          </div>
+
+          <div className={feedback ? (feedback.correct ? "bounce-in" : "shake") : ""}
+            style={{ background:"#fff", borderRadius:24, padding:"28px 20px", color:"#1e293b",
+            marginBottom:16, boxShadow:"0 8px 32px rgba(0,0,0,0.15)", textAlign:"center" }}>
+
+            <div style={{ fontSize:14, color:"#64748b", marginBottom:4 }}>
+              {phase === "mult" ? "🟢 Step 1: Multiply" : phase === "div1" ? "🔴 Step 2: Divide!" : "🟠 Step 3: Divide the other way!"}
+            </div>
+
+            <div style={{ fontSize:36, fontWeight:800, marginBottom:6 }}>
+              {animal.emoji} {cq.text}
+            </div>
+
+            <div style={{ fontSize:12, color:"#94a3b8", marginBottom:16 }}>
+              {phase === "mult" ? "" : `Think: ${cq.hint}`}
+            </div>
+
+            {!feedback && (
+              <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                <input ref={inputRef} type="number" value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100, padding:"12px", fontSize:28, fontWeight:800, textAlign:"center",
+                    borderRadius:14, border:"3px solid #3b82f6", outline:"none",
+                  }} />
+                <Btn onClick={submit} color="#3b82f6" big disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && (
+              <div>
+                <div style={{ fontSize:22, fontWeight:800, color: feedback.correct ? "#10b981" : "#ef4444", marginBottom:8 }}>
+                  {feedback.correct ? randFrom(ENCOURAGEMENTS) : `The answer is ${feedback.answer}`}
+                </div>
+                {phase !== "mult" && feedback.correct && (
+                  <div style={{ fontSize:13, color:"#64748b" }}>
+                    {q.product} ÷ {phase==="div1"?q.a:q.b} = {phase==="div1"?q.b:q.a} because {phase==="div1"?q.a:q.b} × {phase==="div1"?q.b:q.a} = {q.product} ✓
+                  </div>
+                )}
+                <div style={{ marginTop:12 }}>
+                  <Btn onClick={next} color="#3b82f6" big>
+                    {phase === "div2" ? "New fact! →" : "Next step! →"}
+                  </Btn>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:14, padding:16 }}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{"💡"} The Flip Trick</div>
+            <div style={{ fontSize:12, opacity:0.8, lineHeight:1.6 }}>
+              Every multiplication has <strong>two divisions</strong> hiding inside!<br/>
+              {q.a} × {q.b} = {q.product} → {q.product} ÷ {q.a} = {q.b} AND {q.product} ÷ {q.b} = {q.a}<br/>
+              Division is just asking: <strong>"what times {phase==="div1"?q.a:phase==="div2"?q.b:"?"} gives me {q.product}?"</strong>
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── DIVISION QUIZ ──────────────────────────────────────────────
+    function QuizMode({ onBack, addStars }) {
+      const [selectedTables, setSelectedTables] = useState([]);
+      const [started, setStarted] = useState(false);
+
+      if (started && selectedTables.length > 0) {
+        return <QuizGame tables={selectedTables} onBack={() => setStarted(false)} addStars={addStars} />;
+      }
+
+      const toggle = (t) => setSelectedTables(p => p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #78350f 0%, #92400e 50%, #f59e0b 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Division Quiz" />
+          <div style={{ textAlign:"center", fontSize:14, opacity:0.8, marginBottom:16 }}>Pick which ÷ tables to practise!</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:20 }}>
+            {TABLES.map(t => (
+              <button key={t} onClick={() => {playSound("click");toggle(t);}}
+                style={{ padding:"14px 8px", borderRadius:14, border:selectedTables.includes(t)?"3px solid #fff":"3px solid transparent",
+                background:selectedTables.includes(t)?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.08)",
+                color:"#fff", cursor:"pointer", textAlign:"center" }}>
+                <div style={{ fontSize:28 }}>{ANIMALS[t].emoji}</div>
+                <div style={{ fontWeight:800, fontSize:18 }}>÷{t}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+            <Btn onClick={() => setSelectedTables([...TABLES])} color="#92400e">All</Btn>
+            <Btn onClick={() => setStarted(true)} color="#fff" disabled={!selectedTables.length} big style={{ color:"#92400e" }}>Start! 🎯</Btn>
+          </div>
+        </div>
+      </div>;
+    }
+
+    function QuizGame({ tables, onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [streak, setStreak] = useState(0);
+      const [best, setBest] = useState(0);
+      const [score, setScore] = useState({c:0,t:0});
+      const [confetti, setConfetti] = useState(false);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const divisor = randFrom(tables);
+        const answer = Math.floor(Math.random()*10)+1;
+        const total = divisor * answer;
+        setQ({ total, divisor, answer });
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, [tables]);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        if (val === q.answer) {
+          playSound("correct");
+          const ns = streak+1;
+          setStreak(ns); setBest(b => Math.max(b,ns));
+          const stars = ns>=5?3:ns>=3?2:1;
+          addStars(stars);
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS), stars });
+          setScore(s => ({c:s.c+1, t:s.t+1}));
+          setConfetti(ns>0 && ns%5===0);
+        } else {
+          playSound("wrong"); setStreak(0);
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS) });
+          setScore(s => ({...s, t:s.t+1}));
+        }
+      };
+
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)generate();else submit();} };
+      if (!q) return null;
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #78350f 0%, #92400e 50%, #f59e0b 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={confetti} />
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Division Quiz" />
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            {[{l:"Score",v:`${score.c}/${score.t}`},{l:"Streak",v:`${streak>0?"🔥":""}${streak}`},{l:"Best",v:`🏆 ${best}`}].map((s,i) => (
+              <div key={i} style={{ flex:1, background:"rgba(255,255,255,0.15)", borderRadius:10, padding:"8px", textAlign:"center" }}>
+                <div style={{ fontSize:10, opacity:0.7 }}>{s.l}</div>
+                <div style={{ fontWeight:800, fontSize:18 }}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff", borderRadius:24, padding:"32px 24px", textAlign:"center",
+            color:"#1e293b", boxShadow:"0 8px 32px rgba(0,0,0,0.15)", marginBottom:16 }}>
+
+            <div style={{ fontSize:42, fontWeight:800, marginBottom:20 }}>
+              {q.total} ÷ {q.divisor} = ?
+            </div>
+
+            {!feedback && (
+              <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"12px",fontSize:28,fontWeight:800,textAlign:"center",
+                    borderRadius:14,border:"3px solid #f59e0b",outline:"none",
+                  }} />
+                <Btn onClick={submit} color="#f59e0b" big disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{ fontSize:22, fontWeight:800, color:feedback.correct?"#10b981":"#ef4444", marginBottom:6 }}>{feedback.msg}</div>
+              {feedback.correct && <div style={{ fontSize:14, color:"#64748b" }}>+{feedback.stars} ⭐</div>}
+              {!feedback.correct && <div style={{ color:"#64748b", fontSize:14 }}>
+                The answer is <strong style={{ fontSize:20 }}>{q.answer}</strong><br/>
+                <span style={{ color:"#3b82f6" }}>Because {q.divisor} × {q.answer} = {q.total}</span>
+              </div>}
+              <div style={{ marginTop:12 }}><Btn onClick={generate} color="#f59e0b" big>Next →</Btn></div>
+            </div>}
+          </div>
+
+          {streak >= 5 && <div className="pulse" style={{ textAlign:"center", fontSize:16, fontWeight:700, color:"#fef3c7" }}>
+            {"🔥"} {streak} in a row! UNSTOPPABLE! {"🔥"}
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── SPEED MODE ─────────────────────────────────────────────────
+    function SpeedMode({ onBack, addStars }) {
+      const [phase, setPhase] = useState("setup");
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [score, setScore] = useState(0);
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [flash, setFlash] = useState(null);
+      const inputRef = useRef();
+      const timerRef = useRef();
+
+      const genQ = useCallback(() => {
+        const d = randFrom(TABLES);
+        const a = Math.floor(Math.random()*10)+1;
+        return { total: d*a, divisor: d, answer: a };
+      }, []);
+
+      const start = () => { setPhase("play"); setScore(0); setTimeLeft(60); setQ(genQ()); setInput("");
+        setTimeout(() => inputRef.current?.focus(), 100); };
+
+      useEffect(() => {
+        if (phase!=="play") return;
+        timerRef.current = setInterval(() => {
+          setTimeLeft(t => { if(t<=1){clearInterval(timerRef.current);setPhase("done");return 0;} return t-1; });
+        }, 1000);
+        return () => clearInterval(timerRef.current);
+      }, [phase]);
+
+      useEffect(() => { if(phase==="done"){ playSound("levelup"); addStars(Math.floor(score/2)); } }, [phase]);
+
+      const submit = () => {
+        if (!input||phase!=="play") return;
+        if (parseInt(input)===q.answer) { playSound("correct"); setScore(s=>s+1); setFlash("correct"); }
+        else { playSound("wrong"); setFlash("wrong"); }
+        setTimeout(() => setFlash(null), 300);
+        setQ(genQ()); setInput(""); inputRef.current?.focus();
+      };
+
+      const handleKey = (e) => { if(e.key==="Enter") submit(); };
+
+      if (phase==="setup") return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Speed Divide" />
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:56, marginBottom:12 }}>{"⚡"}</div>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:20 }}>60 seconds. How many divisions can you solve?</div>
+            <Btn onClick={start} color="#fff" big style={{ color:"#b91c1c" }}>GO! 🚀</Btn>
+          </div>
+        </div>
+      </div>;
+
+      if (phase==="done") return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding:"20px 16px", color:"#fff" }}>
+        <Confetti active={true} />
+        <div style={{ maxWidth:500, margin:"0 auto", textAlign:"center", paddingTop:60 }}>
+          <div style={{ fontSize:64, marginBottom:16 }}>{score>=20?"🏆":score>=10?"🌟":"💪"}</div>
+          <div style={{ fontSize:28, fontWeight:800, marginBottom:8 }}>Time's Up!</div>
+          <div style={{ fontSize:64, fontWeight:800 }}>{score}</div>
+          <div style={{ fontSize:16, opacity:0.8, marginBottom:8 }}>correct divisions!</div>
+          <div style={{ fontSize:18, marginBottom:32 }}>+{Math.floor(score/2)} ⭐</div>
+          <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+            <Btn onClick={start} color="rgba(255,255,255,0.2)">Again!</Btn>
+            <Btn onClick={onBack} color="rgba(255,255,255,0.2)">Back</Btn>
+          </div>
+        </div>
+      </div>;
+
+      const bar = (timeLeft/60)*100;
+      return <div style={{ minHeight:"100vh", padding:"20px 16px", color:"#fff",
+        background: flash==="correct"?"#10b981":flash==="wrong"?"#ef4444":"linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)",
+        transition:"background 0.15s" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:10, height:12, marginBottom:16, overflow:"hidden" }}>
+            <div style={{ background:timeLeft>10?"#fbbf24":"#fff", height:"100%", borderRadius:10, width:`${bar}%`, transition:"width 1s linear" }} />
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:20 }}>
+            <div style={{ fontSize:32, fontWeight:800 }}>{timeLeft}s</div>
+            <div style={{ fontSize:32, fontWeight:800 }}>Score: {score}</div>
+          </div>
+          <div style={{ background:"#fff", borderRadius:24, padding:"40px 24px", textAlign:"center", boxShadow:"0 8px 32px rgba(0,0,0,0.15)" }}>
+            <div style={{ fontSize:48, fontWeight:800, color:"#1e293b", marginBottom:24 }}>{q?.total} ÷ {q?.divisor}</div>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={handleKey} autoFocus style={{
+                  width:100,padding:"12px",fontSize:32,fontWeight:800,textAlign:"center",
+                  borderRadius:14,border:"3px solid #ef4444",outline:"none",color:"#1e293b",
+                }} />
+              <Btn onClick={submit} color="#ef4444" big>GO</Btn>
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── MISSING NUMBER ─────────────────────────────────────────────
+    function MissingMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const divisor = randFrom(TABLES);
+        const answer = Math.floor(Math.random()*10)+1;
+        const total = divisor * answer;
+        // Randomly choose which number is missing
+        const type = randFrom(["total","divisor","answer"]);
+        setQ({ total, divisor, answer, type });
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const getMissing = () => {
+        if (q.type==="total") return q.total;
+        if (q.type==="divisor") return q.divisor;
+        return q.answer;
+      };
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        if (val === getMissing()) {
+          playSound("correct"); addStars(1);
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s => ({c:s.c+1, t:s.t+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS), answer:getMissing() });
+          setScore(s => ({...s, t:s.t+1}));
+        }
+      };
+
+      const handleKey = (e) => { if(e.key==="Enter"){if(feedback)generate();else submit();} };
+      if (!q) return null;
+
+      const renderQ = () => {
+        const box = <span style={{ display:"inline-block", width:60, height:44, lineHeight:"44px", borderRadius:10,
+          background:"#fbbf24", color:"#78350f", fontWeight:800, fontSize:24, textAlign:"center",
+          verticalAlign:"middle" }}>?</span>;
+        const num = (n) => <span style={{ fontWeight:800 }}>{n}</span>;
+
+        if (q.type==="total") return <>{box}{" ÷ "}{num(q.divisor)}{" = "}{num(q.answer)}</>;
+        if (q.type==="divisor") return <>{num(q.total)}{" ÷ "}{box}{" = "}{num(q.answer)}</>;
+        return <>{num(q.total)}{" ÷ "}{num(q.divisor)}{" = "}{box}</>;
+      };
+
+      const getHint = () => {
+        if (q.type==="total") return `Think: ${q.divisor} × ${q.answer} = ?`;
+        if (q.type==="divisor") return `Think: ? × ${q.answer} = ${q.total}`;
+        return `Think: ${q.divisor} × ? = ${q.total}`;
+      };
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Missing Number" />
+          <div style={{ textAlign:"center", fontSize:13, opacity:0.7, marginBottom:8 }}>{score.c}/{score.t} correct</div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff", borderRadius:24, padding:"32px 20px", textAlign:"center",
+            color:"#1e293b", boxShadow:"0 8px 32px rgba(0,0,0,0.15)", marginBottom:16 }}>
+
+            <div style={{ fontSize:13, color:"#94a3b8", marginBottom:12 }}>Find the missing number!</div>
+            <div style={{ fontSize:32, fontWeight:800, marginBottom:8 }}>{renderQ()}</div>
+            <div style={{ fontSize:13, color:"#8b5cf6", marginBottom:16 }}>{"💡"} {getHint()}</div>
+
+            {!feedback && (
+              <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"12px",fontSize:28,fontWeight:800,textAlign:"center",
+                    borderRadius:14,border:"3px solid #8b5cf6",outline:"none",
+                  }} />
+                <Btn onClick={submit} color="#8b5cf6" big disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{ fontSize:22, fontWeight:800, color:feedback.correct?"#10b981":"#ef4444", marginBottom:8 }}>
+                {feedback.correct ? feedback.msg : `The answer is ${feedback.answer}`}
+              </div>
+              <div style={{ fontSize:14, color:"#64748b" }}>
+                {q.total} ÷ {q.divisor} = {q.answer} because {q.divisor} × {q.answer} = {q.total}
+              </div>
+              <div style={{ marginTop:12 }}><Btn onClick={generate} color="#8b5cf6" big>Next →</Btn></div>
+            </div>}
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── REMAINDERS ─────────────────────────────────────────────────
+    function RemainderMode({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [inputQ, setInputQ] = useState("");
+      const [inputR, setInputR] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const qRef = useRef();
+      const rRef = useRef();
+
+      const generate = useCallback(() => {
+        const divisor = randFrom([2,3,4,5,6,7,8,9]);
+        // Generate a number that does NOT divide evenly (most of the time)
+        const hasRemainder = Math.random() > 0.2;
+        let total;
+        if (hasRemainder) {
+          const base = (Math.floor(Math.random()*9)+1) * divisor;
+          const rem = Math.floor(Math.random()*(divisor-1))+1;
+          total = base + rem;
+        } else {
+          total = (Math.floor(Math.random()*10)+1) * divisor;
+        }
+        const answer = Math.floor(total / divisor);
+        const remainder = total % divisor;
+        setQ({ total, divisor, answer, remainder });
+        setInputQ(""); setInputR(""); setFeedback(null);
+        setTimeout(() => qRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        if (!inputQ) return;
+        const valQ = parseInt(inputQ);
+        const valR = parseInt(inputR || "0");
+        if (valQ === q.answer && valR === q.remainder) {
+          playSound("correct"); addStars(q.remainder > 0 ? 2 : 1);
+          setFeedback({ correct:true, msg:randFrom(ENCOURAGEMENTS), stars: q.remainder>0?2:1 });
+          setScore(s => ({c:s.c+1, t:s.t+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({ correct:false, msg:randFrom(WRONG_MSGS) });
+          setScore(s => ({...s, t:s.t+1}));
+        }
+      };
+
+      const handleKey = (e) => {
+        if(e.key==="Enter") { if(feedback) generate(); else submit(); }
+        if(e.key==="Tab" && e.target===qRef.current) { e.preventDefault(); rRef.current?.focus(); }
+      };
+
+      if (!q) return null;
+      const fruit = FRUIT[q.divisor % FRUIT.length];
+      const nearestBelow = q.answer * q.divisor;
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #831843 0%, #be185d 50%, #ec4899 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Remainders" />
+          <div style={{ textAlign:"center", fontSize:13, opacity:0.7, marginBottom:8 }}>{score.c}/{score.t} correct</div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff", borderRadius:24, padding:"28px 20px", textAlign:"center",
+            color:"#1e293b", boxShadow:"0 8px 32px rgba(0,0,0,0.15)", marginBottom:16 }}>
+
+            {/* Visual */}
+            {q.total <= 50 && (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:3, marginBottom:8 }}>
+                  {Array.from({length:q.total}, (_,i) => {
+                    const isRemainder = i >= nearestBelow;
+                    return <span key={i} className="pop-in" style={{
+                      fontSize: q.total>30?14:18,
+                      animationDelay:`${i*15}ms`,
+                      opacity: feedback && isRemainder ? 1 : 1,
+                      background: feedback && isRemainder ? "#fef3c7" : "transparent",
+                      borderRadius: 4, padding: "0 1px",
+                    }}>{fruit}</span>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize:36, fontWeight:800, marginBottom:16 }}>
+              {q.total} ÷ {q.divisor} = ?
+            </div>
+
+            {!feedback && (
+              <div>
+                <div style={{ display:"flex", gap:8, justifyContent:"center", alignItems:"center", marginBottom:8 }}>
+                  <div style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>Answer</div>
+                    <input ref={qRef} type="number" value={inputQ} onChange={e=>setInputQ(e.target.value)}
+                      onKeyDown={handleKey} autoFocus style={{
+                        width:80,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                        borderRadius:12,border:"3px solid #ec4899",outline:"none",
+                      }} />
+                  </div>
+                  <div style={{ fontSize:14, color:"#94a3b8", fontWeight:600, marginTop:16 }}>remainder</div>
+                  <div style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:11, color:"#94a3b8", marginBottom:4 }}>r</div>
+                    <input ref={rRef} type="number" value={inputR} onChange={e=>setInputR(e.target.value)}
+                      onKeyDown={handleKey} placeholder="0" style={{
+                        width:60,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                        borderRadius:12,border:"3px solid #f59e0b",outline:"none",
+                      }} />
+                  </div>
+                  <Btn onClick={submit} color="#ec4899" big style={{ marginTop:16 }} disabled={!inputQ}>Go!</Btn>
+                </div>
+                <div style={{ fontSize:12, color:"#94a3b8" }}>If it divides evenly, remainder is 0</div>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{ fontSize:22, fontWeight:800, color:feedback.correct?"#10b981":"#ef4444", marginBottom:8 }}>
+                {feedback.correct ? feedback.msg : "Not quite!"}
+              </div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#1e293b", marginBottom:4 }}>
+                {q.total} ÷ {q.divisor} = {q.answer}{q.remainder > 0 ? ` remainder ${q.remainder}` : ""}
+              </div>
+              <div style={{ fontSize:13, color:"#64748b", lineHeight:1.6 }}>
+                {q.remainder > 0 ? <>
+                  {q.divisor} × {q.answer} = {nearestBelow} (closest without going over)<br/>
+                  {q.total} − {nearestBelow} = {q.remainder} left over
+                </> : <>
+                  {q.divisor} × {q.answer} = {q.total} — divides perfectly! No remainder.
+                </>}
+              </div>
+              {feedback.correct && <div style={{ fontSize:14, color:"#64748b", marginTop:4 }}>+{feedback.stars} ⭐</div>}
+              <div style={{ marginTop:12 }}><Btn onClick={generate} color="#ec4899" big>Next →</Btn></div>
+            </div>}
+          </div>
+
+          <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:14, padding:16 }}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{"💡"} How to find remainders</div>
+            <div style={{ fontSize:12, opacity:0.8, lineHeight:1.6 }}>
+              <strong>Step 1:</strong> Find the biggest number in the ÷{q.divisor} table that fits inside {q.total}<br/>
+              <strong>Step 2:</strong> That tells you the answer<br/>
+              <strong>Step 3:</strong> Subtract to find what's left over<br/><br/>
+              {q.divisor} × {q.answer} = {nearestBelow} ← fits inside {q.total}<br/>
+              {q.total > (q.answer+1)*q.divisor ? "" : <>{q.divisor} × {q.answer+1} = {(q.answer+1)*q.divisor} ← too big!<br/></>}
+              {q.total} − {nearestBelow} = <strong>{q.remainder} remainder</strong>
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(() => {
+        try { return parseInt(localStorage.getItem("div_stars")||"0"); } catch { return 0; }
+      });
+
+      const addStars = (n) => {
+        setTotalStars(prev => {
+          const next = prev + n;
+          try { localStorage.setItem("div_stars", next); } catch {}
+          return next;
+        });
+      };
+
+      const goHome = () => setScreen("home");
+
+      switch (screen) {
+        case "share": return <ShareMode onBack={goHome} addStars={addStars} />;
+        case "flip": return <FlipMode onBack={goHome} addStars={addStars} />;
+        case "quiz": return <QuizGame tables={TABLES} onBack={goHome} addStars={addStars} />;
+        case "speed": return <SpeedMode onBack={goHome} addStars={addStars} />;
+        case "missing": return <MissingMode onBack={goHome} addStars={addStars} />;
+        case "remainder": return <RemainderMode onBack={goHome} addStars={addStars} />;
+        default: return <Home onNav={setScreen} totalStars={totalStars} />;
+      }
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
