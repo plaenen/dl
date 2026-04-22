@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Times Tables Adventure!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes confettiFall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes rainbow { 0% { color: #ef4444; } 16% { color: #f97316; } 33% { color: #eab308; } 50% { color: #22c55e; } 66% { color: #3b82f6; } 83% { color: #8b5cf6; } 100% { color: #ef4444; } }
+    .bounce-in { animation: bounceIn 0.5s ease-out; }
+    .shake { animation: shake 0.4s ease-out; }
+    .float { animation: float 3s ease-in-out infinite; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .slide-up { animation: slideUp 0.4s ease-out; }
+    .rainbow { animation: rainbow 3s linear infinite; }
+    .confetti-piece { position: fixed; top: -20px; animation: confettiFall 3s ease-in forwards; pointer-events: none; z-index: 9999; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ─── DATA ───────────────────────────────────────────────────────
+    const TABLES = [2, 3, 4, 5, 6, 7, 8, 9];
+
+    const ANIMALS = {
+      2: { emoji: "\ud83d\udc3c", name: "Panda", color: "#1e293b", bg: "#f1f5f9" },
+      3: { emoji: "\ud83d\udc2c", name: "Dolphin", color: "#0369a1", bg: "#e0f2fe" },
+      4: { emoji: "\ud83d\udc2f", name: "Tiger", color: "#c2410c", bg: "#fff7ed" },
+      5: { emoji: "\ud83d\udc27", name: "Penguin", color: "#4338ca", bg: "#eef2ff" },
+      6: { emoji: "\ud83e\udd89", name: "Owl", color: "#7e22ce", bg: "#faf5ff" },
+      7: { emoji: "\ud83e\udd8a", name: "Fox", color: "#b45309", bg: "#fffbeb" },
+      8: { emoji: "\ud83d\udc19", name: "Octopus", color: "#be185d", bg: "#fdf2f8" },
+      9: { emoji: "\ud83d\udc09", name: "Dragon", color: "#15803d", bg: "#f0fdf4" },
+    };
+
+    const SMURF_TITLES = [
+      { min: 0,  title: "Clumsy", desc: "Just getting started!" },
+      { min: 10, title: "Dreamy", desc: "Starting to dream in numbers!" },
+      { min: 30, title: "Brainy", desc: "Getting smarter every day!" },
+      { min: 60, title: "Handy", desc: "Handling times tables like a pro!" },
+      { min: 100, title: "Hefty", desc: "Heavy-weight champion!" },
+      { min: 150, title: "Papa Smurf", desc: "The wisest of them all!" },
+    ];
+
+    const MEMORY_HINTS = {
+      "7x8": { answer: 56, hint: "5, 6, 7, 8 \u2014 they go in order! 56 = 7\u00d78" },
+      "8x7": { answer: 56, hint: "5, 6, 7, 8 \u2014 they go in order! 56 = 8\u00d77" },
+      "6x7": { answer: 42, hint: "The answer to life, the universe, and everything! (from Hitchhiker's Guide)" },
+      "7x6": { answer: 42, hint: "The answer to life, the universe, and everything!" },
+      "8x8": { answer: 64, hint: "I 8 and I 8 till I was sick on the floor \u2014 8\u00d78 = 64!" },
+      "6x6": { answer: 36, hint: "Six times six, do the tricks \u2014 thirty-six!" },
+      "7x7": { answer: 49, hint: "Seven stories tall, 49 bricks in the wall!" },
+      "3x7": { answer: 21, hint: "Blackjack! The best hand in cards = 21" },
+      "7x3": { answer: 21, hint: "Blackjack! 21!" },
+      "4x7": { answer: 28, hint: "February has 28 days \u2014 that's 4 weeks of 7!" },
+      "7x4": { answer: 28, hint: "4 weeks = 28 days!" },
+      "6x8": { answer: 48, hint: "Six and eight went through the gate \u2014 48!" },
+      "8x6": { answer: 48, hint: "Six and eight went through the gate \u2014 48!" },
+      "3x8": { answer: 24, hint: "Hours in a day! 3\u00d78 = 24" },
+      "8x3": { answer: 24, hint: "Hours in a day! 8\u00d73 = 24" },
+      "9x9": { answer: 81, hint: "A cat has 9 lives \u00d7 9 = 81 adventures!" },
+      "3x9": { answer: 27, hint: "There are 27 bones in your hand! 3\u00d79" },
+      "9x3": { answer: 27, hint: "27 bones in your hand!" },
+      "4x8": { answer: 32, hint: "A chess board has 32 white squares! 4\u00d78" },
+      "8x4": { answer: 32, hint: "32 white squares on a chess board!" },
+      "6x9": { answer: 54, hint: "If 6 turned upside down is 9... 6\u00d79 = 54!" },
+      "9x6": { answer: 54, hint: "6\u00d79 = 54 \u2014 six flipped is nine!" },
+      "7x9": { answer: 63, hint: "7 days \u00d7 9 weeks = 63 days of summer!" },
+      "9x7": { answer: 63, hint: "63 days of summer! 9\u00d77" },
+      "8x9": { answer: 72, hint: "8 spiders with 9 legs each = 72 legs (silly spiders!)" },
+      "9x8": { answer: 72, hint: "72 silly spider legs! 9\u00d78" },
+      "4x6": { answer: 24, hint: "24 hours in a day! Works for 4\u00d76 too!" },
+      "6x4": { answer: 24, hint: "24 hours! 6\u00d74" },
+    };
+
+    const NINE_TRICK = "The 9s have a magic trick! Hold up 10 fingers. Put down finger #N. The fingers to the LEFT are the tens digit, the fingers to the RIGHT are the ones digit!";
+
+    const ENCOURAGEMENTS = [
+      "Amazing! \ud83c\udf1f", "Brilliant! \ud83d\udca1", "Superstar! \u2b50", "You rock! \ud83e\udea8",
+      "Incredible! \ud83c\udf08", "Genius! \ud83e\udde0", "Fantastic! \ud83c\udf89", "Wow! \ud83d\ude80",
+      "Perfect! \ud83c\udfaf", "On fire! \ud83d\udd25", "Legend! \ud83c\udfc6", "Unstoppable! \u26a1",
+    ];
+
+    const WRONG_ENCOURAGEMENTS = [
+      "Almost! Try again! \ud83d\udcaa", "So close! You've got this! \ud83c\udf1f",
+      "Oops! No worries! \ud83d\ude0a", "Keep going! \ud83d\ude80",
+      "Nearly there! \ud83c\udf08", "Don't give up! \u2728",
+    ];
+
+    // ─── HELPERS ────────────────────────────────────────────────────
+    function getSmurfTitle(stars) {
+      let title = SMURF_TITLES[0];
+      for (const t of SMURF_TITLES) { if (stars >= t.min) title = t; }
+      return title;
+    }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.value = 0.15;
+        if (type === "correct") {
+          osc.frequency.value = 523; osc.start(); osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2); gain.gain.setValueAtTime(0, ctx.currentTime + 0.35); osc.stop(ctx.currentTime + 0.35);
+        } else if (type === "wrong") {
+          osc.frequency.value = 200; osc.type = "sawtooth"; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.3); osc.stop(ctx.currentTime + 0.3);
+        } else if (type === "levelup") {
+          osc.frequency.value = 523; osc.start();
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3);
+          osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.45);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.7); osc.stop(ctx.currentTime + 0.7);
+        } else if (type === "click") {
+          osc.frequency.value = 800; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.08); osc.stop(ctx.currentTime + 0.08);
+        }
+      } catch(e) {}
+    }
+
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    }
+
+    function randFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    // ─── CONFETTI ───────────────────────────────────────────────────
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        const items = Array.from({ length: 30 }, (_, i) => ({
+          id: Date.now() + i,
+          left: Math.random() * 100,
+          delay: Math.random() * 0.5,
+          emoji: randFrom(["\ud83c\udf1f", "\u2b50", "\ud83c\udf89", "\ud83c\udf8a", "\u2728", "\ud83d\udc96", "\ud83e\udda9", "\ud83c\udf08"]),
+        }));
+        setPieces(items);
+        const timer = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(timer);
+      }, [active]);
+      return (<>
+        {pieces.map(p => (
+          <div key={p.id} className="confetti-piece" style={{ left: `${p.left}%`, animationDelay: `${p.delay}s` }}>{p.emoji}</div>
+        ))}
+      </>);
+    }
+
+    // ─── BUTTON ─────────────────────────────────────────────────────
+    function Btn({ children, onClick, color = "#3b82f6", big, disabled, style: extraStyle }) {
+      return (
+        <button onClick={() => { if (!disabled) { playSound("click"); onClick?.(); }}} disabled={disabled} style={{
+          padding: big ? "16px 32px" : "10px 20px", borderRadius: 14, border: "none",
+          background: disabled ? "#cbd5e1" : color, color: "#fff", fontWeight: 700,
+          fontSize: big ? 18 : 14, cursor: disabled ? "default" : "pointer",
+          boxShadow: disabled ? "none" : `0 4px 14px ${color}44`,
+          transition: "all 0.2s", transform: "scale(1)", ...extraStyle,
+        }}>{children}</button>
+      );
+    }
+
+    // ─── HOME SCREEN ────────────────────────────────────────────────
+    function HomeScreen({ onNavigate, totalStars, mastered }) {
+      const smurf = getSmurfTitle(totalStars);
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #4338ca 60%, #6366f1 100%)", padding: "30px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            {/* Title */}
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }} className="float">{"\ud83c\udf1f"}</div>
+              <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 4 }}>
+                <span className="rainbow">Times Tables</span>
+              </h1>
+              <h2 style={{ fontSize: 22, fontWeight: 700, opacity: 0.9 }}>Adventure!</h2>
+            </div>
+
+            {/* Stats bar */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 14px", backdropFilter: "blur(10px)" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 2 }}>Stars</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{"\u2b50"} {totalStars}</div>
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 2 }}>Title</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{smurf.title}</div>
+                <div style={{ fontSize: 10, opacity: 0.7 }}>{smurf.desc}</div>
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 2 }}>Mastered</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{mastered.length}/8</div>
+              </div>
+            </div>
+
+            {/* Animal collection */}
+            <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 16, marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.7, marginBottom: 10 }}>Your Animal Collection</div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
+                {TABLES.map(t => (
+                  <div key={t} style={{ width: 52, height: 52, borderRadius: 12,
+                    background: mastered.includes(t) ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
+                    filter: mastered.includes(t) ? "none" : "grayscale(1) opacity(0.3)",
+                    transition: "all 0.3s",
+                  }}>
+                    {ANIMALS[t].emoji}
+                  </div>
+                ))}
+              </div>
+              <div style={{ textAlign: "center", fontSize: 11, opacity: 0.5, marginTop: 8 }}>
+                Master a times table to collect its animal!
+              </div>
+            </div>
+
+            {/* Game modes */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <ModeCard emoji={"\ud83d\udcda"} title="Learn & Explore" desc="See patterns, memory tricks & the magic of 9s!"
+                color="#10b981" onClick={() => onNavigate("learn")} />
+              <ModeCard emoji={"\ud83c\udfae"} title="Quiz Adventure" desc="Answer questions, earn stars, collect animals!"
+                color="#f59e0b" onClick={() => onNavigate("quiz")} />
+              <ModeCard emoji={"\u26a1"} title="Speed Challenge" desc="How many can you get in 60 seconds?"
+                color="#ef4444" onClick={() => onNavigate("speed")} />
+              <ModeCard emoji={"\ud83c\udccf"} title="Memory Match" desc="Match 3\u00d74 with 4\u00d73 and 12!"
+                color="#8b5cf6" onClick={() => onNavigate("match")} />
+              <ModeCard emoji={"\ud83d\uddfa\ufe0f"} title="Times Table Map" desc="See how ALL the tables connect!"
+                color="#0ea5e9" onClick={() => onNavigate("explorer")} />
+            </div>
+
+            {/* Smurf title progression */}
+            <div style={{ marginTop: 20, background: "rgba(255,255,255,0.08)", borderRadius: 16, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.7, marginBottom: 10 }}>Smurf Ranks</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {SMURF_TITLES.map((s, i) => (
+                  <span key={i} style={{ padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                    background: totalStars >= s.min ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.05)",
+                    opacity: totalStars >= s.min ? 1 : 0.4,
+                  }}>{s.min}{"\u2b50"} {s.title}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ModeCard({ emoji, title, desc, color, onClick }) {
+      return (
+        <button onClick={() => { playSound("click"); onClick(); }} style={{
+          display: "flex", alignItems: "center", gap: 14, padding: "16px 18px",
+          borderRadius: 16, border: "2px solid rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.08)", color: "#fff", cursor: "pointer",
+          textAlign: "left", transition: "all 0.2s", backdropFilter: "blur(10px)",
+        }}>
+          <div style={{ width: 50, height: 50, borderRadius: 14, background: color,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0,
+          }}>{emoji}</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{title}</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{desc}</div>
+          </div>
+        </button>
+      );
+    }
+
+    // ─── BACK BAR ───────────────────────────────────────────────────
+    function BackBar({ onBack, title, color = "#1e1b4b" }) {
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", marginBottom: 12 }}>
+          <button onClick={() => { playSound("click"); onBack(); }} style={{
+            width: 36, height: 36, borderRadius: 10, border: "none",
+            background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 18,
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          }}>{"\u2190"}</button>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>{title}</span>
+        </div>
+      );
+    }
+
+    // ─── LEARN MODE ─────────────────────────────────────────────────
+    function LearnMode({ onBack }) {
+      const [selectedTable, setSelectedTable] = useState(null);
+
+      if (selectedTable !== null) {
+        return <LearnTable table={selectedTable} onBack={() => setSelectedTable(null)} />;
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #064e3b 0%, #065f46 50%, #10b981 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Learn & Explore" />
+
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 14, opacity: 0.8 }}>Pick a times table to explore!</div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {TABLES.map(t => (
+                <button key={t} onClick={() => { playSound("click"); setSelectedTable(t); }}
+                  style={{
+                    padding: 20, borderRadius: 16, border: "none", cursor: "pointer",
+                    background: "rgba(255,255,255,0.12)", color: "#fff", textAlign: "center",
+                    transition: "all 0.2s", backdropFilter: "blur(10px)",
+                  }}>
+                  <div style={{ fontSize: 40, marginBottom: 6 }}>{ANIMALS[t].emoji}</div>
+                  <div style={{ fontWeight: 800, fontSize: 22 }}>{t}x</div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>{ANIMALS[t].name} Table</div>
+                </button>
+              ))}
+            </div>
+
+            {/* 9s trick */}
+            <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", borderRadius: 16, padding: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{"\ud83e\udd4f"} The Magic 9s Finger Trick!</div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>{NINE_TRICK}</div>
+              <div style={{ fontSize: 13, marginTop: 10, opacity: 0.9 }}>
+                Example: 9\u00d73 = hold up 10 fingers, put down finger 3.<br/>
+                Left: 2 fingers, Right: 7 fingers \u2192 <strong>27!</strong>
+              </div>
+              <div style={{ fontSize: 13, marginTop: 10, opacity: 0.9 }}>
+                Also: 9\u00d7 any number \u2014 the digits ALWAYS add up to 9!<br/>
+                9\u00d74=<strong>36</strong> (3+6=9) \u2022 9\u00d77=<strong>63</strong> (6+3=9) \u2022 9\u00d78=<strong>72</strong> (7+2=9)
+              </div>
+            </div>
+
+            {/* Commutative property */}
+            <div style={{ marginTop: 12, background: "rgba(255,255,255,0.12)", borderRadius: 16, padding: 18 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{"\ud83d\udd04"} The Swap Secret!</div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>
+                Here's a superpower: <strong>you can always swap the numbers!</strong><br/>
+                3 \u00d7 4 = 4 \u00d7 3 = 12<br/>
+                7 \u00d7 8 = 8 \u00d7 7 = 56<br/><br/>
+                So if you know your 3s, you already know part of your 4s, 5s, 6s, 7s, 8s and 9s!
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function LearnTable({ table, onBack }) {
+      const animal = ANIMALS[table];
+      const facts = Array.from({ length: 10 }, (_, i) => {
+        const n = i + 1;
+        const key = `${table}x${n}`;
+        const keySwap = `${n}x${table}`;
+        return { n, result: table * n, hint: MEMORY_HINTS[key]?.hint || MEMORY_HINTS[keySwap]?.hint || null };
+      });
+
+      return (
+        <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${animal.color}22 0%, ${animal.color}11 100%)`,
+          padding: "20px 16px", color: "#1e293b" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <button onClick={() => { playSound("click"); onBack(); }} style={{
+                width: 36, height: 36, borderRadius: 10, border: "none",
+                background: animal.color, color: "#fff", fontSize: 18, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>{"\u2190"}</button>
+              <span style={{ fontSize: 32 }}>{animal.emoji}</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 22, color: animal.color }}>{table}\u00d7 Table</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>The {animal.name} Table</div>
+              </div>
+            </div>
+
+            {facts.map((f, i) => (
+              <div key={i} className="slide-up" style={{
+                background: "#fff", borderRadius: 14, padding: "14px 18px", marginBottom: 8,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)", animationDelay: `${i * 0.05}s`,
+                animationFillMode: "both", display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <div style={{ fontWeight: 800, fontSize: 20, color: animal.color, minWidth: 110 }}>
+                  {table} \u00d7 {f.n} = {f.result}
+                </div>
+                <div style={{ fontSize: 12, color: "#64748b", minWidth: 80 }}>
+                  {"\ud83d\udd04"} {f.n} \u00d7 {table} = {f.result}
+                </div>
+                {f.hint && (
+                  <div style={{ fontSize: 11, color: animal.color, background: `${animal.color}11`,
+                    padding: "4px 8px", borderRadius: 8, marginLeft: "auto", maxWidth: 180 }}>
+                    {"\ud83d\udca1"} {f.hint}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Pattern spotting */}
+            <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginTop: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: animal.color, marginBottom: 8 }}>{"\ud83d\udd0d"} Spot the Pattern!</div>
+              {table === 2 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 2s are just <strong>doubles!</strong> 2\u00d73 is just 3+3. Every answer is an <strong>even number</strong>.</div>}
+              {table === 5 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 5s always end in <strong>0</strong> or <strong>5</strong>! They go 5, 10, 15, 20, 25, 30... Easy peasy!</div>}
+              {table === 9 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The <strong>tens digit goes up</strong> by 1 and the <strong>ones digit goes down</strong> by 1! 09, 18, 27, 36, 45, 54, 63, 72, 81, 90. And the digits always add to 9!</div>}
+              {table === 4 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 4s are just <strong>double the 2s!</strong> If you know 2\u00d76=12, then 4\u00d76=24 (double 12)!</div>}
+              {table === 3 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 3s have a digit-sum pattern too! Add the digits: they cycle through <strong>3, 6, 9</strong> over and over. 3, 6, 9, 12(1+2=3), 15(1+5=6), 18(1+8=9)...</div>}
+              {table === 6 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>When you multiply 6 by an <strong>even</strong> number, the answer ends in the same digit! 6\u00d72=1<strong>2</strong>, 6\u00d74=2<strong>4</strong>, 6\u00d76=3<strong>6</strong>, 6\u00d78=4<strong>8</strong>!</div>}
+              {table === 7 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 7s are the trickiest \u2014 but by now you already know most of them from other tables! 7\u00d72, 7\u00d73, 7\u00d74, 7\u00d75, 7\u00d76 are all ones you've seen before. That only leaves 7\u00d77, 7\u00d78, 7\u00d79!</div>}
+              {table === 8 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 8s are <strong>double the 4s</strong> (which are double the 2s!). So 8\u00d76: start with 2\u00d76=12, double to 24, double to <strong>48</strong>!</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── QUIZ MODE ──────────────────────────────────────────────────
+    function QuizMode({ onBack, addStars, checkMastery }) {
+      const [selectedTables, setSelectedTables] = useState([]);
+      const [started, setStarted] = useState(false);
+
+      if (started && selectedTables.length > 0) {
+        return <QuizGame tables={selectedTables} onBack={() => setStarted(false)} addStars={addStars} checkMastery={checkMastery} />;
+      }
+
+      const toggle = (t) => {
+        setSelectedTables(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #78350f 0%, #92400e 50%, #f59e0b 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Quiz Adventure" />
+            <div style={{ textAlign: "center", fontSize: 14, opacity: 0.8, marginBottom: 16 }}>
+              Pick which tables to practice!
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 20 }}>
+              {TABLES.map(t => (
+                <button key={t} onClick={() => { playSound("click"); toggle(t); }}
+                  style={{
+                    padding: "14px 8px", borderRadius: 14, border: selectedTables.includes(t) ? "3px solid #fff" : "3px solid transparent",
+                    background: selectedTables.includes(t) ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                    color: "#fff", cursor: "pointer", textAlign: "center", transition: "all 0.2s",
+                  }}>
+                  <div style={{ fontSize: 28 }}>{ANIMALS[t].emoji}</div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}>{t}\u00d7</div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn onClick={() => setSelectedTables([...TABLES])} color="#92400e" style={{ flex: 1 }}>Select All</Btn>
+              <Btn onClick={() => { setStarted(true); }} color="#fff" disabled={selectedTables.length === 0}
+                style={{ flex: 2, color: "#92400e" }} big>
+                Start Quiz! {"\ud83c\udfae"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function QuizGame({ tables, onBack, addStars, checkMastery }) {
+      const [question, setQuestion] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null); // { correct, message, hint }
+      const [streak, setStreak] = useState(0);
+      const [bestStreak, setBestStreak] = useState(0);
+      const [total, setTotal] = useState(0);
+      const [correct, setCorrect] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [tableScores, setTableScores] = useState({}); // { "3": { correct: 0, total: 0 } }
+      const inputRef = useRef();
+
+      const generateQuestion = useCallback(() => {
+        const t = randFrom(tables);
+        const n = Math.floor(Math.random() * 10) + 1;
+        // Randomly swap to show commutative property
+        const swap = Math.random() > 0.5;
+        const a = swap ? n : t;
+        const b = swap ? t : n;
+        setQuestion({ a, b, answer: a * b, table: t });
+        setInput("");
+        setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, [tables]);
+
+      useEffect(() => { generateQuestion(); }, [generateQuestion]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseInt(input);
+        const isCorrect = val === question.answer;
+        const key = `${Math.min(question.a, question.b)}x${Math.max(question.a, question.b)}`;
+        const hintKey = `${question.a}x${question.b}`;
+        const hint = MEMORY_HINTS[hintKey]?.hint || null;
+
+        if (isCorrect) {
+          playSound("correct");
+          const newStreak = streak + 1;
+          setStreak(newStreak);
+          setBestStreak(s => Math.max(s, newStreak));
+          setCorrect(c => c + 1);
+          const starsEarned = newStreak >= 5 ? 3 : newStreak >= 3 ? 2 : 1;
+          addStars(starsEarned);
+          setFeedback({ correct: true, message: randFrom(ENCOURAGEMENTS), stars: starsEarned });
+          setShowConfetti(newStreak > 0 && newStreak % 5 === 0);
+
+          // Track per-table mastery
+          setTableScores(prev => {
+            const ts = { ...prev };
+            const t = question.table;
+            if (!ts[t]) ts[t] = { correct: 0, total: 0 };
+            ts[t] = { correct: ts[t].correct + 1, total: ts[t].total + 1 };
+            if (ts[t].correct >= 10) checkMastery(t);
+            return ts;
+          });
+        } else {
+          playSound("wrong");
+          setStreak(0);
+          setFeedback({
+            correct: false,
+            message: randFrom(WRONG_ENCOURAGEMENTS),
+            actualAnswer: question.answer,
+            hint,
+            swap: `${question.b} \u00d7 ${question.a} = ${question.answer} too!`,
+          });
+          setTableScores(prev => {
+            const ts = { ...prev };
+            const t = question.table;
+            if (!ts[t]) ts[t] = { correct: 0, total: 0 };
+            ts[t] = { ...ts[t], total: ts[t].total + 1 };
+            return ts;
+          });
+        }
+        setTotal(t => t + 1);
+      };
+
+      const handleKey = (e) => { if (e.key === "Enter") { if (feedback) generateQuestion(); else submit(); } };
+
+      if (!question) return null;
+
+      const animal = ANIMALS[question.table];
+
+      return (
+        <div style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${animal.color} 0%, ${animal.color}cc 100%)`, padding: "20px 16px", color: "#fff" }}>
+          <Confetti active={showConfetti} />
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Quiz Adventure" />
+
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, opacity: 0.7 }}>Score</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{correct}/{total}</div>
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, opacity: 0.7 }}>Streak</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{streak > 0 ? "\ud83d\udd25" : ""} {streak}</div>
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "8px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, opacity: 0.7 }}>Best</div>
+                <div style={{ fontWeight: 800, fontSize: 18 }}>{"\ud83c\udfc6"} {bestStreak}</div>
+              </div>
+            </div>
+
+            {/* Question */}
+            <div className={feedback ? (feedback.correct ? "bounce-in" : "shake") : ""} style={{
+              background: "#fff", borderRadius: 24, padding: "32px 24px", textAlign: "center",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.15)", marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>{animal.emoji}</div>
+              <div style={{ fontSize: 42, fontWeight: 800, color: "#1e293b", marginBottom: 20 }}>
+                {question.a} \u00d7 {question.b} = ?
+              </div>
+
+              {!feedback && (
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", alignItems: "center" }}>
+                  <input ref={inputRef} type="number" value={input} onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKey} autoFocus
+                    style={{
+                      width: 120, padding: "12px 16px", fontSize: 28, fontWeight: 800,
+                      textAlign: "center", borderRadius: 14, border: `3px solid ${animal.color}`,
+                      outline: "none", color: "#1e293b",
+                    }} />
+                  <Btn onClick={submit} color={animal.color} big disabled={!input}>Go!</Btn>
+                </div>
+              )}
+
+              {feedback && (
+                <div className="slide-up">
+                  <div style={{ fontSize: 24, fontWeight: 800, color: feedback.correct ? "#10b981" : "#ef4444", marginBottom: 8 }}>
+                    {feedback.message}
+                  </div>
+                  {feedback.correct && (
+                    <div style={{ fontSize: 14, color: "#64748b" }}>+{feedback.stars} {"\u2b50"}</div>
+                  )}
+                  {!feedback.correct && (
+                    <div style={{ color: "#64748b", fontSize: 14 }}>
+                      <div style={{ marginBottom: 6 }}>The answer is <strong style={{ color: "#1e293b", fontSize: 22 }}>{feedback.actualAnswer}</strong></div>
+                      <div style={{ fontSize: 13, color: "#6366f1" }}>{"\ud83d\udd04"} {feedback.swap}</div>
+                      {feedback.hint && (
+                        <div style={{ marginTop: 8, background: "#fef3c7", color: "#92400e", padding: "8px 12px", borderRadius: 10, fontSize: 13 }}>
+                          {"\ud83d\udca1"} Memory trick: {feedback.hint}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 16 }}>
+                    <Btn onClick={generateQuestion} color={animal.color} big>Next Question {"\u2192"}</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {streak >= 5 && (
+              <div className="pulse" style={{ textAlign: "center", fontSize: 16, fontWeight: 700, color: "#fbbf24" }}>
+                {"\ud83d\udd25"} {streak} in a row! You're on FIRE! {"\ud83d\udd25"}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── SPEED MODE ─────────────────────────────────────────────────
+    function SpeedMode({ onBack, addStars }) {
+      const [phase, setPhase] = useState("setup"); // setup, playing, done
+      const [selectedTables, setSelectedTables] = useState([...TABLES]);
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [score, setScore] = useState(0);
+      const [question, setQuestion] = useState(null);
+      const [input, setInput] = useState("");
+      const [flash, setFlash] = useState(null);
+      const inputRef = useRef();
+      const timerRef = useRef();
+
+      const genQ = useCallback(() => {
+        const t = randFrom(selectedTables);
+        const n = Math.floor(Math.random() * 10) + 1;
+        const swap = Math.random() > 0.5;
+        return { a: swap ? n : t, b: swap ? t : n, answer: t * n };
+      }, [selectedTables]);
+
+      const start = () => {
+        setPhase("playing");
+        setScore(0);
+        setTimeLeft(60);
+        setQuestion(genQ());
+        setInput("");
+        setTimeout(() => inputRef.current?.focus(), 100);
+      };
+
+      useEffect(() => {
+        if (phase !== "playing") return;
+        timerRef.current = setInterval(() => {
+          setTimeLeft(t => {
+            if (t <= 1) { clearInterval(timerRef.current); setPhase("done"); return 0; }
+            return t - 1;
+          });
+        }, 1000);
+        return () => clearInterval(timerRef.current);
+      }, [phase]);
+
+      useEffect(() => {
+        if (phase === "done") {
+          playSound("levelup");
+          addStars(Math.floor(score / 2));
+        }
+      }, [phase]);
+
+      const submit = () => {
+        if (!input || phase !== "playing") return;
+        if (parseInt(input) === question.answer) {
+          playSound("correct");
+          setScore(s => s + 1);
+          setFlash("correct");
+        } else {
+          playSound("wrong");
+          setFlash("wrong");
+        }
+        setTimeout(() => setFlash(null), 300);
+        setQuestion(genQ());
+        setInput("");
+        inputRef.current?.focus();
+      };
+
+      const handleKey = (e) => { if (e.key === "Enter") submit(); };
+
+      const toggle = (t) => setSelectedTables(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+
+      if (phase === "setup") {
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding: "20px 16px", color: "#fff" }}>
+            <div style={{ maxWidth: 500, margin: "0 auto" }}>
+              <BackBar onBack={onBack} title="Speed Challenge" />
+              <div style={{ textAlign: "center", fontSize: 48, marginBottom: 12 }}>{"\u26a1"}</div>
+              <div style={{ textAlign: "center", fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                60 seconds. How many can you get?
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 20 }}>
+                {TABLES.map(t => (
+                  <button key={t} onClick={() => { playSound("click"); toggle(t); }}
+                    style={{
+                      padding: "10px", borderRadius: 12, border: selectedTables.includes(t) ? "3px solid #fff" : "3px solid transparent",
+                      background: selectedTables.includes(t) ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.06)",
+                      color: "#fff", cursor: "pointer", fontWeight: 800, fontSize: 20,
+                    }}>{t}\u00d7</button>
+                ))}
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <Btn onClick={start} color="#fff" big style={{ color: "#b91c1c" }} disabled={selectedTables.length === 0}>
+                  GO! {"\ud83d\ude80"}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (phase === "done") {
+        const stars = Math.floor(score / 2);
+        return (
+          <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding: "20px 16px", color: "#fff" }}>
+            <Confetti active={true} />
+            <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center", paddingTop: 60 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }}>{score >= 20 ? "\ud83c\udfc6" : score >= 10 ? "\ud83c\udf1f" : "\ud83d\udcaa"}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Time's Up!</div>
+              <div style={{ fontSize: 64, fontWeight: 800, marginBottom: 8 }}>{score}</div>
+              <div style={{ fontSize: 16, opacity: 0.8, marginBottom: 8 }}>correct answers in 60 seconds!</div>
+              <div style={{ fontSize: 18, marginBottom: 32 }}>+{stars} {"\u2b50"} earned!</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <Btn onClick={start} color="rgba(255,255,255,0.2)">Try Again</Btn>
+                <Btn onClick={onBack} color="rgba(255,255,255,0.2)">Back</Btn>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // playing
+      const barWidth = (timeLeft / 60) * 100;
+      return (
+        <div style={{ minHeight: "100vh", padding: "20px 16px", color: "#fff",
+          background: flash === "correct" ? "#10b981" : flash === "wrong" ? "#ef4444" : "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)",
+          transition: "background 0.15s",
+        }}>
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            {/* Timer bar */}
+            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 10, height: 12, marginBottom: 16, overflow: "hidden" }}>
+              <div style={{ background: timeLeft > 10 ? "#fbbf24" : "#fff", height: "100%", borderRadius: 10,
+                width: `${barWidth}%`, transition: "width 1s linear" }} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 32, fontWeight: 800 }}>{timeLeft}s</div>
+              <div style={{ fontSize: 32, fontWeight: 800 }}>Score: {score}</div>
+            </div>
+
+            <div style={{ background: "#fff", borderRadius: 24, padding: "40px 24px", textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+              <div style={{ fontSize: 52, fontWeight: 800, color: "#1e293b", marginBottom: 24 }}>
+                {question?.a} \u00d7 {question?.b}
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                <input ref={inputRef} type="number" value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus
+                  style={{ width: 120, padding: "12px", fontSize: 32, fontWeight: 800,
+                    textAlign: "center", borderRadius: 14, border: "3px solid #ef4444", outline: "none", color: "#1e293b" }} />
+                <Btn onClick={submit} color="#ef4444" big>GO</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MATCH MODE ─────────────────────────────────────────────────
+    function MatchMode({ onBack, addStars }) {
+      const [cards, setCards] = useState([]);
+      const [flipped, setFlipped] = useState([]);
+      const [matched, setMatched] = useState([]);
+      const [moves, setMoves] = useState(0);
+      const [gameComplete, setGameComplete] = useState(false);
+
+      useEffect(() => {
+        // Generate pairs: expression and its commutative partner or answer
+        const pairs = [];
+        const used = new Set();
+        while (pairs.length < 6) {
+          const t = randFrom(TABLES);
+          const n = Math.floor(Math.random() * 9) + 2;
+          const key = `${Math.min(t,n)}_${Math.max(t,n)}`;
+          if (used.has(key)) continue;
+          used.add(key);
+          const answer = t * n;
+          // Three types of matches: expression, swapped expression, answer
+          const type = Math.random();
+          if (type < 0.5) {
+            // Match expression with swapped version
+            pairs.push(
+              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${n} \u00d7 ${t}`, group: key, type: "swap" },
+            );
+          } else {
+            // Match expression with answer
+            pairs.push(
+              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${answer}`, group: key, type: "answer" },
+            );
+          }
+        }
+        setCards(shuffle(pairs));
+        setFlipped([]);
+        setMatched([]);
+        setMoves(0);
+        setGameComplete(false);
+      }, []);
+
+      const handleFlip = (idx) => {
+        if (flipped.length >= 2) return;
+        if (flipped.includes(idx)) return;
+        if (matched.includes(cards[idx].group)) return;
+
+        playSound("click");
+        const newFlipped = [...flipped, idx];
+        setFlipped(newFlipped);
+
+        if (newFlipped.length === 2) {
+          setMoves(m => m + 1);
+          const [a, b] = newFlipped;
+          if (cards[a].group === cards[b].group) {
+            playSound("correct");
+            const newMatched = [...matched, cards[a].group];
+            setMatched(newMatched);
+            setTimeout(() => setFlipped([]), 500);
+            if (newMatched.length === 6) {
+              setTimeout(() => {
+                playSound("levelup");
+                setGameComplete(true);
+                addStars(Math.max(1, 8 - Math.floor(moves / 3)));
+              }, 600);
+            }
+          } else {
+            playSound("wrong");
+            setTimeout(() => setFlipped([]), 1000);
+          }
+        }
+      };
+
+      const restart = () => {
+        const pairs = [];
+        const used = new Set();
+        while (pairs.length < 6) {
+          const t = randFrom(TABLES);
+          const n = Math.floor(Math.random() * 9) + 2;
+          const key = `${Math.min(t,n)}_${Math.max(t,n)}`;
+          if (used.has(key)) continue;
+          used.add(key);
+          const answer = t * n;
+          const type = Math.random();
+          if (type < 0.5) {
+            pairs.push(
+              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${n} \u00d7 ${t}`, group: key, type: "swap" },
+            );
+          } else {
+            pairs.push(
+              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${answer}`, group: key, type: "answer" },
+            );
+          }
+        }
+        setCards(shuffle(pairs));
+        setFlipped([]);
+        setMatched([]);
+        setMoves(0);
+        setGameComplete(false);
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #8b5cf6 100%)", padding: "20px 16px", color: "#fff" }}>
+          <Confetti active={gameComplete} />
+          <div style={{ maxWidth: 500, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Memory Match" />
+
+            <div style={{ textAlign: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 14, opacity: 0.8 }}>Match pairs! Find the expression with its twin or answer</span>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>Moves: {moves}</div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+              {cards.map((card, idx) => {
+                const isFlipped = flipped.includes(idx);
+                const isMatched = matched.includes(card.group);
+                return (
+                  <button key={idx} onClick={() => handleFlip(idx)}
+                    className={isMatched ? "bounce-in" : ""}
+                    style={{
+                      height: 90, borderRadius: 16, border: "none", cursor: isMatched ? "default" : "pointer",
+                      fontSize: isFlipped || isMatched ? 20 : 32, fontWeight: 800,
+                      background: isMatched ? "#10b981" : isFlipped ? "#fff" : "rgba(255,255,255,0.15)",
+                      color: isMatched ? "#fff" : isFlipped ? "#1e293b" : "#fff",
+                      transition: "all 0.3s", transform: isFlipped ? "rotateY(0deg)" : "",
+                      boxShadow: isFlipped ? "0 4px 16px rgba(0,0,0,0.15)" : "none",
+                    }}>
+                    {isFlipped || isMatched ? card.text : "?"}
+                  </button>
+                );
+              })}
+            </div>
+
+            {gameComplete && (
+              <div className="slide-up" style={{ textAlign: "center", background: "rgba(255,255,255,0.15)", borderRadius: 16, padding: 24 }}>
+                <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>{"\ud83c\udf89"} All Matched!</div>
+                <div style={{ fontSize: 16, marginBottom: 16 }}>Done in {moves} moves!</div>
+                <Btn onClick={restart} color="#10b981" big>Play Again!</Btn>
+              </div>
+            )}
+
+            <div style={{ marginTop: 12, background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"\ud83d\udca1"} Remember the Swap Secret!</div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>3 \u00d7 4 = 4 \u00d7 3 = 12. Some cards show swapped versions, some show the answer. Both are matches!</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── EXPLORER MODE ──────────────────────────────────────────────
+    function ExplorerMode({ onBack }) {
+      const [highlight, setHighlight] = useState(null); // { row, col } or null
+      const [showSwap, setShowSwap] = useState(false);
+
+      const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0c4a6e 0%, #0369a1 50%, #0ea5e9 100%)", padding: "20px 16px", color: "#fff" }}>
+          <div style={{ maxWidth: 600, margin: "0 auto" }}>
+            <BackBar onBack={onBack} title="Times Table Map" />
+
+            <div style={{ textAlign: "center", fontSize: 13, opacity: 0.8, marginBottom: 12 }}>
+              Tap any cell to highlight its row and column!
+            </div>
+
+            <div style={{ overflowX: "auto", marginBottom: 16 }}>
+              <table style={{ borderCollapse: "collapse", margin: "0 auto", background: "rgba(255,255,255,0.1)", borderRadius: 14 }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#fbbf24" }}>\u00d7</th>
+                    {nums.map(n => (
+                      <th key={n} style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700,
+                        background: highlight?.col === n ? "rgba(251,191,36,0.3)" : "transparent",
+                        color: highlight?.col === n ? "#fbbf24" : "#fff",
+                        borderRadius: n === 1 ? "10px 0 0 0" : n === 10 ? "0 10px 0 0" : 0,
+                      }}>{n}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {nums.map(row => (
+                    <tr key={row}>
+                      <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700,
+                        background: highlight?.row === row ? "rgba(251,191,36,0.3)" : "transparent",
+                        color: highlight?.row === row ? "#fbbf24" : "#fff",
+                      }}>{row}</td>
+                      {nums.map(col => {
+                        const val = row * col;
+                        const isHighlighted = highlight && (highlight.row === row || highlight.col === col);
+                        const isSelected = highlight && highlight.row === row && highlight.col === col;
+                        const isSwapCell = showSwap && highlight && highlight.row === col && highlight.col === row;
+                        return (
+                          <td key={col} onClick={() => setHighlight(highlight?.row === row && highlight?.col === col ? null : { row, col })}
+                            style={{
+                              padding: "8px 10px", fontSize: 13, fontWeight: 600, textAlign: "center",
+                              cursor: "pointer", transition: "all 0.15s",
+                              background: isSelected ? "#fbbf24" : isSwapCell ? "#f97316" : isHighlighted ? "rgba(251,191,36,0.15)" : "transparent",
+                              color: isSelected ? "#1e293b" : isSwapCell ? "#fff" : isHighlighted ? "#fbbf24" : "rgba(255,255,255,0.8)",
+                              borderRadius: isSelected ? 8 : 0,
+                              fontWeight: isSelected || isSwapCell ? 800 : 600,
+                            }}>
+                            {val}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {highlight && (
+              <div className="slide-up" style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", marginBottom: 4 }}>
+                  {highlight.row} \u00d7 {highlight.col} = {highlight.row * highlight.col}
+                </div>
+                <div style={{ fontSize: 14, opacity: 0.8 }}>
+                  {"\ud83d\udd04"} Same as {highlight.col} \u00d7 {highlight.row} = {highlight.row * highlight.col}
+                </div>
+                {MEMORY_HINTS[`${highlight.row}x${highlight.col}`] && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: "#fbbf24" }}>
+                    {"\ud83d\udca1"} {MEMORY_HINTS[`${highlight.row}x${highlight.col}`].hint}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button onClick={() => { playSound("click"); setShowSwap(!showSwap); }}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: 12, border: showSwap ? "2px solid #f97316" : "2px solid rgba(255,255,255,0.2)",
+                  background: showSwap ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.08)",
+                  color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13,
+                }}>
+                {"\ud83d\udd04"} {showSwap ? "Hide" : "Show"} Swap Partner
+              </button>
+            </div>
+
+            <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 14, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"\ud83c\udf1f"} Did you notice?</div>
+              <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>
+                The table is a <strong>mirror</strong>! Draw a diagonal line from top-left to bottom-right \u2014 the numbers on each side are identical. That's because <strong>3\u00d77 always equals 7\u00d73</strong>. So you only need to learn half the table!
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(() => {
+        try { return parseInt(localStorage.getItem("tt_stars") || "0"); } catch { return 0; }
+      });
+      const [mastered, setMastered] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("tt_mastered") || "[]"); } catch { return []; }
+      });
+
+      const addStars = (n) => {
+        setTotalStars(prev => {
+          const next = prev + n;
+          try { localStorage.setItem("tt_stars", next); } catch {}
+          return next;
+        });
+      };
+
+      const checkMastery = (table) => {
+        setMastered(prev => {
+          if (prev.includes(table)) return prev;
+          const next = [...prev, table];
+          try { localStorage.setItem("tt_mastered", JSON.stringify(next)); } catch {}
+          playSound("levelup");
+          return next;
+        });
+      };
+
+      const goHome = () => setScreen("home");
+
+      switch (screen) {
+        case "learn": return <LearnMode onBack={goHome} />;
+        case "quiz": return <QuizMode onBack={goHome} addStars={addStars} checkMastery={checkMastery} />;
+        case "speed": return <SpeedMode onBack={goHome} addStars={addStars} />;
+        case "match": return <MatchMode onBack={goHome} addStars={addStars} />;
+        case "explorer": return <ExplorerMode onBack={goHome} />;
+        default: return <HomeScreen onNavigate={setScreen} totalStars={totalStars} mastered={mastered} />;
+      }
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
