@@ -56,34 +56,34 @@
     ];
 
     const MEMORY_HINTS = {
-      "7x8": { answer: 56, hint: "5, 6, 7, 8 \u2014 they go in order! 56 = 7\u00d78" },
-      "8x7": { answer: 56, hint: "5, 6, 7, 8 \u2014 they go in order! 56 = 8\u00d77" },
+      "7x8": { answer: 56, hint: "5, 6, 7, 8 — they go in order! 56 = 7×8" },
+      "8x7": { answer: 56, hint: "5, 6, 7, 8 — they go in order! 56 = 8×7" },
       "6x7": { answer: 42, hint: "The answer to life, the universe, and everything! (from Hitchhiker's Guide)" },
       "7x6": { answer: 42, hint: "The answer to life, the universe, and everything!" },
-      "8x8": { answer: 64, hint: "I 8 and I 8 till I was sick on the floor \u2014 8\u00d78 = 64!" },
-      "6x6": { answer: 36, hint: "Six times six, do the tricks \u2014 thirty-six!" },
+      "8x8": { answer: 64, hint: "I 8 and I 8 till I was sick on the floor — 8×8 = 64!" },
+      "6x6": { answer: 36, hint: "Six times six, do the tricks — thirty-six!" },
       "7x7": { answer: 49, hint: "Seven stories tall, 49 bricks in the wall!" },
       "3x7": { answer: 21, hint: "Blackjack! The best hand in cards = 21" },
       "7x3": { answer: 21, hint: "Blackjack! 21!" },
-      "4x7": { answer: 28, hint: "February has 28 days \u2014 that's 4 weeks of 7!" },
+      "4x7": { answer: 28, hint: "February has 28 days — that's 4 weeks of 7!" },
       "7x4": { answer: 28, hint: "4 weeks = 28 days!" },
-      "6x8": { answer: 48, hint: "Six and eight went through the gate \u2014 48!" },
-      "8x6": { answer: 48, hint: "Six and eight went through the gate \u2014 48!" },
-      "3x8": { answer: 24, hint: "Hours in a day! 3\u00d78 = 24" },
-      "8x3": { answer: 24, hint: "Hours in a day! 8\u00d73 = 24" },
-      "9x9": { answer: 81, hint: "A cat has 9 lives \u00d7 9 = 81 adventures!" },
-      "3x9": { answer: 27, hint: "There are 27 bones in your hand! 3\u00d79" },
+      "6x8": { answer: 48, hint: "Six and eight went through the gate — 48!" },
+      "8x6": { answer: 48, hint: "Six and eight went through the gate — 48!" },
+      "3x8": { answer: 24, hint: "Hours in a day! 3×8 = 24" },
+      "8x3": { answer: 24, hint: "Hours in a day! 8×3 = 24" },
+      "9x9": { answer: 81, hint: "A cat has 9 lives × 9 = 81 adventures!" },
+      "3x9": { answer: 27, hint: "There are 27 bones in your hand! 3×9" },
       "9x3": { answer: 27, hint: "27 bones in your hand!" },
-      "4x8": { answer: 32, hint: "A chess board has 32 white squares! 4\u00d78" },
+      "4x8": { answer: 32, hint: "A chess board has 32 white squares! 4×8" },
       "8x4": { answer: 32, hint: "32 white squares on a chess board!" },
-      "6x9": { answer: 54, hint: "If 6 turned upside down is 9... 6\u00d79 = 54!" },
-      "9x6": { answer: 54, hint: "6\u00d79 = 54 \u2014 six flipped is nine!" },
-      "7x9": { answer: 63, hint: "7 days \u00d7 9 weeks = 63 days of summer!" },
-      "9x7": { answer: 63, hint: "63 days of summer! 9\u00d77" },
+      "6x9": { answer: 54, hint: "If 6 turned upside down is 9... 6×9 = 54!" },
+      "9x6": { answer: 54, hint: "6×9 = 54 — six flipped is nine!" },
+      "7x9": { answer: 63, hint: "7 days × 9 weeks = 63 days of summer!" },
+      "9x7": { answer: 63, hint: "63 days of summer! 9×7" },
       "8x9": { answer: 72, hint: "8 spiders with 9 legs each = 72 legs (silly spiders!)" },
-      "9x8": { answer: 72, hint: "72 silly spider legs! 9\u00d78" },
-      "4x6": { answer: 24, hint: "24 hours in a day! Works for 4\u00d76 too!" },
-      "6x4": { answer: 24, hint: "24 hours! 6\u00d74" },
+      "9x8": { answer: 72, hint: "72 silly spider legs! 9×8" },
+      "4x6": { answer: 24, hint: "24 hours in a day! Works for 4×6 too!" },
+      "6x4": { answer: 24, hint: "24 hours! 6×4" },
     };
 
     const NINE_TRICK = "The 9s have a magic trick! Hold up 10 fingers. Put down finger #N. The fingers to the LEFT are the tens digit, the fingers to the RIGHT are the ones digit!";
@@ -237,7 +237,7 @@
                 color="#f59e0b" onClick={() => onNavigate("quiz")} />
               <ModeCard emoji={"\u26a1"} title="Speed Challenge" desc="How many can you get in 60 seconds?"
                 color="#ef4444" onClick={() => onNavigate("speed")} />
-              <ModeCard emoji={"\ud83c\udccf"} title="Memory Match" desc="Match 3\u00d74 with 4\u00d73 and 12!"
+              <ModeCard emoji={"\ud83c\udccf"} title="Memory Match" desc="Match 3×4 with 4×3 and 12!"
                 color="#8b5cf6" onClick={() => onNavigate("match")} />
               <ModeCard emoji={"\ud83d\uddfa\ufe0f"} title="Times Table Map" desc="See how ALL the tables connect!"
                 color="#0ea5e9" onClick={() => onNavigate("explorer")} />
@@ -330,12 +330,12 @@
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{"\ud83e\udd4f"} The Magic 9s Finger Trick!</div>
               <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>{NINE_TRICK}</div>
               <div style={{ fontSize: 13, marginTop: 10, opacity: 0.9 }}>
-                Example: 9\u00d73 = hold up 10 fingers, put down finger 3.<br/>
-                Left: 2 fingers, Right: 7 fingers \u2192 <strong>27!</strong>
+                Example: 9×3 = hold up 10 fingers, put down finger 3.<br/>
+                Left: 2 fingers, Right: 7 fingers → <strong>27!</strong>
               </div>
               <div style={{ fontSize: 13, marginTop: 10, opacity: 0.9 }}>
-                Also: 9\u00d7 any number \u2014 the digits ALWAYS add up to 9!<br/>
-                9\u00d74=<strong>36</strong> (3+6=9) \u2022 9\u00d77=<strong>63</strong> (6+3=9) \u2022 9\u00d78=<strong>72</strong> (7+2=9)
+                Also: 9× any number — the digits ALWAYS add up to 9!<br/>
+                9×4=<strong>36</strong> (3+6=9) • 9×7=<strong>63</strong> (6+3=9) • 9×8=<strong>72</strong> (7+2=9)
               </div>
             </div>
 
@@ -344,8 +344,8 @@
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{"\ud83d\udd04"} The Swap Secret!</div>
               <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>
                 Here's a superpower: <strong>you can always swap the numbers!</strong><br/>
-                3 \u00d7 4 = 4 \u00d7 3 = 12<br/>
-                7 \u00d7 8 = 8 \u00d7 7 = 56<br/><br/>
+                3 × 4 = 4 × 3 = 12<br/>
+                7 × 8 = 8 × 7 = 56<br/><br/>
                 So if you know your 3s, you already know part of your 4s, 5s, 6s, 7s, 8s and 9s!
               </div>
             </div>
@@ -375,7 +375,7 @@
               }}>{"\u2190"}</button>
               <span style={{ fontSize: 32 }}>{animal.emoji}</span>
               <div>
-                <div style={{ fontWeight: 800, fontSize: 22, color: animal.color }}>{table}\u00d7 Table</div>
+                <div style={{ fontWeight: 800, fontSize: 22, color: animal.color }}>{table}× Table</div>
                 <div style={{ fontSize: 12, color: "#64748b" }}>The {animal.name} Table</div>
               </div>
             </div>
@@ -387,10 +387,10 @@
                 animationFillMode: "both", display: "flex", alignItems: "center", gap: 12,
               }}>
                 <div style={{ fontWeight: 800, fontSize: 20, color: animal.color, minWidth: 110 }}>
-                  {table} \u00d7 {f.n} = {f.result}
+                  {table} × {f.n} = {f.result}
                 </div>
                 <div style={{ fontSize: 12, color: "#64748b", minWidth: 80 }}>
-                  {"\ud83d\udd04"} {f.n} \u00d7 {table} = {f.result}
+                  {"\ud83d\udd04"} {f.n} × {table} = {f.result}
                 </div>
                 {f.hint && (
                   <div style={{ fontSize: 11, color: animal.color, background: `${animal.color}11`,
@@ -404,14 +404,14 @@
             {/* Pattern spotting */}
             <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginTop: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: animal.color, marginBottom: 8 }}>{"\ud83d\udd0d"} Spot the Pattern!</div>
-              {table === 2 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 2s are just <strong>doubles!</strong> 2\u00d73 is just 3+3. Every answer is an <strong>even number</strong>.</div>}
+              {table === 2 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 2s are just <strong>doubles!</strong> 2×3 is just 3+3. Every answer is an <strong>even number</strong>.</div>}
               {table === 5 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 5s always end in <strong>0</strong> or <strong>5</strong>! They go 5, 10, 15, 20, 25, 30... Easy peasy!</div>}
               {table === 9 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The <strong>tens digit goes up</strong> by 1 and the <strong>ones digit goes down</strong> by 1! 09, 18, 27, 36, 45, 54, 63, 72, 81, 90. And the digits always add to 9!</div>}
-              {table === 4 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 4s are just <strong>double the 2s!</strong> If you know 2\u00d76=12, then 4\u00d76=24 (double 12)!</div>}
+              {table === 4 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 4s are just <strong>double the 2s!</strong> If you know 2×6=12, then 4×6=24 (double 12)!</div>}
               {table === 3 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 3s have a digit-sum pattern too! Add the digits: they cycle through <strong>3, 6, 9</strong> over and over. 3, 6, 9, 12(1+2=3), 15(1+5=6), 18(1+8=9)...</div>}
-              {table === 6 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>When you multiply 6 by an <strong>even</strong> number, the answer ends in the same digit! 6\u00d72=1<strong>2</strong>, 6\u00d74=2<strong>4</strong>, 6\u00d76=3<strong>6</strong>, 6\u00d78=4<strong>8</strong>!</div>}
-              {table === 7 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 7s are the trickiest \u2014 but by now you already know most of them from other tables! 7\u00d72, 7\u00d73, 7\u00d74, 7\u00d75, 7\u00d76 are all ones you've seen before. That only leaves 7\u00d77, 7\u00d78, 7\u00d79!</div>}
-              {table === 8 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 8s are <strong>double the 4s</strong> (which are double the 2s!). So 8\u00d76: start with 2\u00d76=12, double to 24, double to <strong>48</strong>!</div>}
+              {table === 6 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>When you multiply 6 by an <strong>even</strong> number, the answer ends in the same digit! 6×2=1<strong>2</strong>, 6×4=2<strong>4</strong>, 6×6=3<strong>6</strong>, 6×8=4<strong>8</strong>!</div>}
+              {table === 7 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 7s are the trickiest — but by now you already know most of them from other tables! 7×2, 7×3, 7×4, 7×5, 7×6 are all ones you've seen before. That only leaves 7×7, 7×8, 7×9!</div>}
+              {table === 8 && <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.6 }}>The 8s are <strong>double the 4s</strong> (which are double the 2s!). So 8×6: start with 2×6=12, double to 24, double to <strong>48</strong>!</div>}
             </div>
           </div>
         </div>
@@ -448,7 +448,7 @@
                     color: "#fff", cursor: "pointer", textAlign: "center", transition: "all 0.2s",
                   }}>
                   <div style={{ fontSize: 28 }}>{ANIMALS[t].emoji}</div>
-                  <div style={{ fontWeight: 800, fontSize: 18 }}>{t}\u00d7</div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}>{t}×</div>
                 </button>
               ))}
             </div>
@@ -528,7 +528,7 @@
             message: randFrom(WRONG_ENCOURAGEMENTS),
             actualAnswer: question.answer,
             hint,
-            swap: `${question.b} \u00d7 ${question.a} = ${question.answer} too!`,
+            swap: `${question.b} × ${question.a} = ${question.answer} too!`,
           });
           setTableScores(prev => {
             const ts = { ...prev };
@@ -576,7 +576,7 @@
             }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>{animal.emoji}</div>
               <div style={{ fontSize: 42, fontWeight: 800, color: "#1e293b", marginBottom: 20 }}>
-                {question.a} \u00d7 {question.b} = ?
+                {question.a} × {question.b} = ?
               </div>
 
               {!feedback && (
@@ -612,7 +612,7 @@
                     </div>
                   )}
                   <div style={{ marginTop: 16 }}>
-                    <Btn onClick={generateQuestion} color={animal.color} big>Next Question {"\u2192"}</Btn>
+                    <Btn onClick={generateQuestion} color={animal.color} big>Next Question {"→"}</Btn>
                   </div>
                 </div>
               )}
@@ -710,7 +710,7 @@
                       padding: "10px", borderRadius: 12, border: selectedTables.includes(t) ? "3px solid #fff" : "3px solid transparent",
                       background: selectedTables.includes(t) ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.06)",
                       color: "#fff", cursor: "pointer", fontWeight: 800, fontSize: 20,
-                    }}>{t}\u00d7</button>
+                    }}>{t}×</button>
                 ))}
               </div>
               <div style={{ textAlign: "center" }}>
@@ -764,7 +764,7 @@
 
             <div style={{ background: "#fff", borderRadius: 24, padding: "40px 24px", textAlign: "center", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
               <div style={{ fontSize: 52, fontWeight: 800, color: "#1e293b", marginBottom: 24 }}>
-                {question?.a} \u00d7 {question?.b}
+                {question?.a} × {question?.b}
               </div>
               <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
                 <input ref={inputRef} type="number" value={input} onChange={e => setInput(e.target.value)}
@@ -803,13 +803,13 @@
           if (type < 0.5) {
             // Match expression with swapped version
             pairs.push(
-              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
-              { id: pairs.length + 1, text: `${n} \u00d7 ${t}`, group: key, type: "swap" },
+              { id: pairs.length, text: `${t} × ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${n} × ${t}`, group: key, type: "swap" },
             );
           } else {
             // Match expression with answer
             pairs.push(
-              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length, text: `${t} × ${n}`, group: key, type: "expr" },
               { id: pairs.length + 1, text: `${answer}`, group: key, type: "answer" },
             );
           }
@@ -865,12 +865,12 @@
           const type = Math.random();
           if (type < 0.5) {
             pairs.push(
-              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
-              { id: pairs.length + 1, text: `${n} \u00d7 ${t}`, group: key, type: "swap" },
+              { id: pairs.length, text: `${t} × ${n}`, group: key, type: "expr" },
+              { id: pairs.length + 1, text: `${n} × ${t}`, group: key, type: "swap" },
             );
           } else {
             pairs.push(
-              { id: pairs.length, text: `${t} \u00d7 ${n}`, group: key, type: "expr" },
+              { id: pairs.length, text: `${t} × ${n}`, group: key, type: "expr" },
               { id: pairs.length + 1, text: `${answer}`, group: key, type: "answer" },
             );
           }
@@ -924,7 +924,7 @@
 
             <div style={{ marginTop: 12, background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"\ud83d\udca1"} Remember the Swap Secret!</div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>3 \u00d7 4 = 4 \u00d7 3 = 12. Some cards show swapped versions, some show the answer. Both are matches!</div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>3 × 4 = 4 × 3 = 12. Some cards show swapped versions, some show the answer. Both are matches!</div>
             </div>
           </div>
         </div>
@@ -951,7 +951,7 @@
               <table style={{ borderCollapse: "collapse", margin: "0 auto", background: "rgba(255,255,255,0.1)", borderRadius: 14 }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#fbbf24" }}>\u00d7</th>
+                    <th style={{ padding: "8px 10px", fontSize: 14, fontWeight: 800, color: "#fbbf24" }}>×</th>
                     {nums.map(n => (
                       <th key={n} style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700,
                         background: highlight?.col === n ? "rgba(251,191,36,0.3)" : "transparent",
@@ -996,10 +996,10 @@
             {highlight && (
               <div className="slide-up" style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" }}>
                 <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", marginBottom: 4 }}>
-                  {highlight.row} \u00d7 {highlight.col} = {highlight.row * highlight.col}
+                  {highlight.row} × {highlight.col} = {highlight.row * highlight.col}
                 </div>
                 <div style={{ fontSize: 14, opacity: 0.8 }}>
-                  {"\ud83d\udd04"} Same as {highlight.col} \u00d7 {highlight.row} = {highlight.row * highlight.col}
+                  {"\ud83d\udd04"} Same as {highlight.col} × {highlight.row} = {highlight.row * highlight.col}
                 </div>
                 {MEMORY_HINTS[`${highlight.row}x${highlight.col}`] && (
                   <div style={{ marginTop: 8, fontSize: 13, color: "#fbbf24" }}>
@@ -1023,7 +1023,7 @@
             <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 14, padding: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{"\ud83c\udf1f"} Did you notice?</div>
               <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>
-                The table is a <strong>mirror</strong>! Draw a diagonal line from top-left to bottom-right \u2014 the numbers on each side are identical. That's because <strong>3\u00d77 always equals 7\u00d73</strong>. So you only need to learn half the table!
+                The table is a <strong>mirror</strong>! Draw a diagonal line from top-left to bottom-right — the numbers on each side are identical. That's because <strong>3×7 always equals 7×3</strong>. So you only need to learn half the table!
               </div>
             </div>
           </div>
