@@ -72,7 +72,8 @@
 
     // ─── HOME ───────────────────────────────────────────────────────
     function Home({ onNav }) {
-      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4f46e5 100%)", padding:"30px 16px", color:"#fff" }}>
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4f46e5 100%)", padding:"30px 16px", color:"#fff", position:"relative" }}>
+        <a href="index.html" style={{ position:"absolute", top:16, left:16, width:36, height:36, borderRadius:10, background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none" }}>{"🏠"}</a>
         <div style={{ maxWidth:500, margin:"0 auto", textAlign:"center" }}>
           <div style={{ fontSize:56, marginBottom:12 }}>{"🔍"}</div>
           <h1 style={{ fontSize:30, fontWeight:800, marginBottom:4 }}>See the Maths!</h1>
