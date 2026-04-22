@@ -65,6 +65,26 @@
           { value: 200, label: "200 AED", color: "#ea580c" },
         ],
       },
+      EUR: {
+        name: "Euros", symbol: "€", flag: "🇪🇺", color: "#1d4ed8", bg: "#dbeafe",
+        coins: [
+          { value: 0.01, label: "1c", color: "#b45309", shape: "circle", size: 24 },
+          { value: 0.02, label: "2c", color: "#b45309", shape: "circle", size: 26 },
+          { value: 0.05, label: "5c", color: "#b45309", shape: "circle", size: 28 },
+          { value: 0.10, label: "10c", color: "#ca8a04", shape: "circle", size: 26 },
+          { value: 0.20, label: "20c", color: "#ca8a04", shape: "circle", size: 30 },
+          { value: 0.50, label: "50c", color: "#ca8a04", shape: "circle", size: 32 },
+          { value: 1, label: "€1", color: "#6b7280", shape: "circle", size: 30 },
+          { value: 2, label: "€2", color: "#6b7280", shape: "circle", size: 34 },
+        ],
+        notes: [
+          { value: 5, label: "€5", color: "#64748b" },
+          { value: 10, label: "€10", color: "#dc2626" },
+          { value: 20, label: "€20", color: "#2563eb" },
+          { value: 50, label: "€50", color: "#f97316" },
+          { value: 100, label: "€100", color: "#16a34a" },
+        ],
+      },
       HKD: {
         name: "Hong Kong Dollars", symbol: "HK$", flag: "🇭🇰", color: "#b91c1c", bg: "#fee2e2",
         coins: [
@@ -90,7 +110,10 @@
     const RATES = {
       "GBP_AED": 5, "AED_GBP": 0.2,
       "GBP_HKD": 10, "HKD_GBP": 0.1,
+      "GBP_EUR": 1, "EUR_GBP": 1,
       "AED_HKD": 2, "HKD_AED": 0.5,
+      "EUR_AED": 4, "AED_EUR": 0.25,
+      "EUR_HKD": 8, "HKD_EUR": 0.125,
     };
 
     const RATE_DESC = {
@@ -98,8 +121,14 @@
       "AED_GBP": { mult: "÷ 5", explain: "5 dirhams = 1 pound" },
       "GBP_HKD": { mult: "× 10", explain: "1 pound = 10 HK dollars" },
       "HKD_GBP": { mult: "÷ 10", explain: "10 HK dollars = 1 pound" },
+      "GBP_EUR": { mult: "× 1", explain: "1 pound = 1 euro" },
+      "EUR_GBP": { mult: "× 1", explain: "1 euro = 1 pound" },
       "AED_HKD": { mult: "× 2", explain: "1 dirham = 2 HK dollars" },
       "HKD_AED": { mult: "÷ 2", explain: "2 HK dollars = 1 dirham" },
+      "EUR_AED": { mult: "× 4", explain: "1 euro = 4 dirhams" },
+      "AED_EUR": { mult: "÷ 4", explain: "4 dirhams = 1 euro" },
+      "EUR_HKD": { mult: "× 8", explain: "1 euro = 8 HK dollars" },
+      "HKD_EUR": { mult: "÷ 8", explain: "8 HK dollars = 1 euro" },
     };
 
     const SHOP_ITEMS = [
@@ -164,10 +193,11 @@
     </div>}
 
     function fmt(val, cur) {
-      const c = CURRENCIES[cur];
-      if (cur === "GBP") return `£${val % 1 === 0 ? val : val.toFixed(2)}`;
-      if (cur === "AED") return `${val % 1 === 0 ? val : val.toFixed(2)} AED`;
-      return `HK$${val % 1 === 0 ? val : val.toFixed(2)}`;
+      const v = val % 1 === 0 ? val : val.toFixed(2);
+      if (cur === "GBP") return `£${v}`;
+      if (cur === "AED") return `${v} AED`;
+      if (cur === "EUR") return `€${v}`;
+      return `HK$${v}`;
     }
 
     // ─── HOME ───────────────────────────────────────────────────────
@@ -181,7 +211,7 @@
           <div style={{fontSize:16,fontWeight:700,marginBottom:24}}>{"⭐"} {totalStars} stars</div>
 
           <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:24}}>
-            {["GBP","AED","HKD"].map(c => (
+            {["GBP","EUR","AED","HKD"].map(c => (
               <div key={c} style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 16px",textAlign:"center"}}>
                 <div style={{fontSize:28}}>{CURRENCIES[c].flag}</div>
                 <div style={{fontSize:11,fontWeight:600,opacity:0.7}}>{CURRENCIES[c].symbol}</div>
@@ -226,7 +256,7 @@
           <BackBar onBack={onBack} title="Know Your Money" />
 
           <div style={{display:"flex",gap:8,marginBottom:16}}>
-            {["GBP","AED","HKD"].map(k => (
+            {["GBP","EUR","AED","HKD"].map(k => (
               <button key={k} onClick={()=>{playSound("click");setCur(k)}} style={{
                 flex:1,padding:"10px 8px",borderRadius:12,border:cur===k?"3px solid #fff":"3px solid transparent",
                 background:cur===k?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.08)",
@@ -301,7 +331,7 @@
       const inputRef = useRef();
 
       const generate = useCallback(() => {
-        const cur = randFrom(["GBP","AED","HKD"]);
+        const cur = randFrom(["GBP","EUR","AED","HKD"]);
         const c = CURRENCIES[cur];
         // Pick 3-6 random coins/notes
         const allMoney = [...c.coins, ...c.notes.slice(0,3)];
@@ -412,13 +442,17 @@
       const inputRef = useRef();
 
       const generate = useCallback(() => {
-        const cur = randFrom(["GBP","AED","HKD"]);
+        const cur = randFrom(["GBP","EUR","AED","HKD"]);
         const item = randFrom(SHOP_ITEMS);
         let price, paid;
         if (cur === "GBP") {
           price = item.priceGBP;
           const payOptions = [5,10,20,50].filter(n => n >= price);
           paid = payOptions.length ? payOptions[0] : 50;
+        } else if (cur === "EUR") {
+          price = item.priceGBP; // 1:1 simplified
+          const payOptions = [5,10,20,50,100].filter(n => n >= price);
+          paid = payOptions.length ? payOptions[0] : 100;
         } else if (cur === "AED") {
           price = item.priceGBP * 5;
           const payOptions = [10,20,50,100,200].filter(n => n >= price);
@@ -518,7 +552,7 @@
 
       const generate = useCallback(() => {
         // Only do "multiply" conversions (not division ones like HKD_GBP)
-        const pairs = ["GBP_AED","GBP_HKD","AED_HKD"];
+        const pairs = ["GBP_AED","GBP_HKD","AED_HKD","EUR_AED","EUR_HKD"];
         const pair = randFrom(pairs);
         const [from, to] = pair.split("_");
         const rate = RATES[pair];
@@ -547,7 +581,11 @@
               <RateCard from="GBP" to="AED" rate={5} example="£3 = 3 × 5 = 15 AED"
                 visual="£1 → 💰💰💰💰💰 = 5 AED" />
               <RateCard from="GBP" to="HKD" rate={10} example="£3 = 3 × 10 = HK$30"
-                visual="£1 → 💰💰💰💰💰💰💰💰💰💰 = HK$10" />
+                visual="£1 → 💰×10 = HK$10" />
+              <RateCard from="EUR" to="AED" rate={4} example="€3 = 3 × 4 = 12 AED"
+                visual="€1 → 💰💰💰💰 = 4 AED" />
+              <RateCard from="EUR" to="HKD" rate={8} example="€2 = 2 × 8 = HK$16"
+                visual="€1 → 💰💰💰💰💰💰💰💰 = HK$8" />
               <RateCard from="AED" to="HKD" rate={2} example="4 AED = 4 × 2 = HK$8"
                 visual="1 AED → 💰💰 = HK$2" />
             </div>
@@ -559,10 +597,11 @@
                 • 2 pounds = 2 × 5 = <strong>10 dirhams</strong><br/>
                 • 3 pounds = 3 × 5 = <strong>15 dirhams</strong><br/>
                 • 7 pounds = 7 × 5 = <strong>35 dirhams</strong><br/><br/>
-                It's just your <strong>×5 table</strong>! And going to HK$ is your <strong>×10 table</strong>!<br/><br/>
+                Each currency uses a different times table!<br/>
+                <strong>£→AED = ×5</strong> • <strong>£→HK$ = ×10</strong> • <strong>€→AED = ×4</strong> • <strong>€→HK$ = ×8</strong><br/><br/>
                 Going the other way is <strong>division</strong>:<br/>
                 • 20 AED ÷ 5 = <strong>£4</strong><br/>
-                • HK$50 ÷ 10 = <strong>£5</strong>
+                • HK$40 ÷ 8 = <strong>€5</strong>
               </div>
             </div>
 
@@ -684,10 +723,13 @@
         const scenarios = [
           {priceCur:"GBP",payCur:"AED",price:item.priceGBP,rate:5},
           {priceCur:"GBP",payCur:"HKD",price:item.priceGBP,rate:10},
+          {priceCur:"EUR",payCur:"AED",price:item.priceGBP,rate:4},
+          {priceCur:"EUR",payCur:"HKD",price:item.priceGBP,rate:8},
           {priceCur:"AED",payCur:"HKD",price:item.priceGBP*5,rate:2},
-          // Reverse: price in foreign, convert to GBP (division!)
+          // Reverse: price in foreign, convert back (division!)
           {priceCur:"AED",payCur:"GBP",price:item.priceGBP*5,rate:0.2},
           {priceCur:"HKD",payCur:"GBP",price:item.priceGBP*10,rate:0.1},
+          {priceCur:"AED",payCur:"EUR",price:item.priceGBP*4,rate:0.25},
         ];
         const sc = randFrom(scenarios);
         const answer = Math.round(sc.price * sc.rate * 100) / 100;
@@ -785,8 +827,8 @@
           <div style={{background:"rgba(255,255,255,0.1)",borderRadius:14,padding:14}}>
             <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{"📋"} Exchange rates</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {[["🇬🇧→🇦🇪","£1 = 5 AED","×5"],["🇬🇧→🇭🇰","£1 = HK$10","×10"],["🇦🇪→🇭🇰","1 AED = HK$2","×2"]].map(([flags,rate,op],i) => (
-                <div key={i} style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 8px",textAlign:"center",minWidth:100}}>
+              {[["🇬🇧→🇦🇪","£1=5 AED","×5"],["🇬🇧→🇭🇰","£1=HK$10","×10"],["🇪🇺→🇦🇪","€1=4 AED","×4"],["🇪🇺→🇭🇰","€1=HK$8","×8"],["🇦🇪→🇭🇰","1AED=HK$2","×2"]].map(([flags,rate,op],i) => (
+                <div key={i} style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 8px",textAlign:"center",minWidth:60}}>
                   <div style={{fontSize:12}}>{flags}</div>
                   <div style={{fontSize:11,fontWeight:600}}>{rate}</div>
                   <div style={{fontSize:10,opacity:0.7}}>{op}</div>
