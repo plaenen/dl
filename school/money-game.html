@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Money Master!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─── CURRENCY DATA ──────────────────────────────────────────────
+    const CURRENCIES = {
+      GBP: {
+        name: "British Pounds", symbol: "£", flag: "🇬🇧", color: "#1e3a5f", bg: "#dbeafe",
+        coins: [
+          { value: 0.01, label: "1p", color: "#b45309", shape: "circle", size: 28 },
+          { value: 0.02, label: "2p", color: "#b45309", shape: "circle", size: 32 },
+          { value: 0.05, label: "5p", color: "#94a3b8", shape: "circle", size: 26 },
+          { value: 0.10, label: "10p", color: "#94a3b8", shape: "circle", size: 30 },
+          { value: 0.20, label: "20p", color: "#94a3b8", shape: "heptagon", size: 30 },
+          { value: 0.50, label: "50p", color: "#94a3b8", shape: "heptagon", size: 34 },
+          { value: 1, label: "£1", color: "#ca8a04", shape: "circle", size: 30 },
+          { value: 2, label: "£2", color: "#6b7280", shape: "circle", size: 36 },
+        ],
+        notes: [
+          { value: 5, label: "£5", color: "#0ea5e9" },
+          { value: 10, label: "£10", color: "#f97316" },
+          { value: 20, label: "£20", color: "#a855f7" },
+          { value: 50, label: "£50", color: "#ef4444" },
+        ],
+      },
+      AED: {
+        name: "UAE Dirhams", symbol: "AED", flag: "🇦🇪", color: "#047857", bg: "#d1fae5",
+        coins: [
+          { value: 0.25, label: "25 fils", color: "#94a3b8", shape: "circle", size: 26 },
+          { value: 0.50, label: "50 fils", color: "#94a3b8", shape: "circle", size: 30 },
+          { value: 1, label: "1 AED", color: "#ca8a04", shape: "circle", size: 32 },
+        ],
+        notes: [
+          { value: 5, label: "5 AED", color: "#92400e" },
+          { value: 10, label: "10 AED", color: "#10b981" },
+          { value: 20, label: "20 AED", color: "#3b82f6" },
+          { value: 50, label: "50 AED", color: "#7c3aed" },
+          { value: 100, label: "100 AED", color: "#be185d" },
+          { value: 200, label: "200 AED", color: "#ea580c" },
+        ],
+      },
+      HKD: {
+        name: "Hong Kong Dollars", symbol: "HK$", flag: "🇭🇰", color: "#b91c1c", bg: "#fee2e2",
+        coins: [
+          { value: 0.10, label: "10¢", color: "#ca8a04", shape: "circle", size: 22 },
+          { value: 0.20, label: "20¢", color: "#ca8a04", shape: "circle", size: 24 },
+          { value: 0.50, label: "50¢", color: "#ca8a04", shape: "circle", size: 28 },
+          { value: 1, label: "$1", color: "#ca8a04", shape: "circle", size: 28 },
+          { value: 2, label: "$2", color: "#ca8a04", shape: "circle", size: 30 },
+          { value: 5, label: "$5", color: "#94a3b8", shape: "circle", size: 32 },
+          { value: 10, label: "$10", color: "#6b7280", shape: "circle", size: 34 },
+        ],
+        notes: [
+          { value: 10, label: "HK$10", color: "#7c3aed" },
+          { value: 20, label: "HK$20", color: "#2563eb" },
+          { value: 50, label: "HK$50", color: "#059669" },
+          { value: 100, label: "HK$100", color: "#dc2626" },
+          { value: 500, label: "HK$500", color: "#92400e" },
+        ],
+      },
+    };
+
+    // Simplified rates for easy multiplication
+    const RATES = {
+      "GBP_AED": 5, "AED_GBP": 0.2,
+      "GBP_HKD": 10, "HKD_GBP": 0.1,
+      "AED_HKD": 2, "HKD_AED": 0.5,
+    };
+
+    const RATE_DESC = {
+      "GBP_AED": { mult: "× 5", explain: "1 pound = 5 dirhams" },
+      "AED_GBP": { mult: "÷ 5", explain: "5 dirhams = 1 pound" },
+      "GBP_HKD": { mult: "× 10", explain: "1 pound = 10 HK dollars" },
+      "HKD_GBP": { mult: "÷ 10", explain: "10 HK dollars = 1 pound" },
+      "AED_HKD": { mult: "× 2", explain: "1 dirham = 2 HK dollars" },
+      "HKD_AED": { mult: "÷ 2", explain: "2 HK dollars = 1 dirham" },
+    };
+
+    const SHOP_ITEMS = [
+      { name: "Ice cream", emoji: "🍦", priceGBP: 2 },
+      { name: "Book", emoji: "📚", priceGBP: 5 },
+      { name: "Toy car", emoji: "🚗", priceGBP: 3 },
+      { name: "Teddy bear", emoji: "🧸", priceGBP: 8 },
+      { name: "Chocolate bar", emoji: "🍫", priceGBP: 1 },
+      { name: "Football", emoji: "⚽", priceGBP: 10 },
+      { name: "Puzzle", emoji: "🧩", priceGBP: 4 },
+      { name: "Water bottle", emoji: "🧴", priceGBP: 3 },
+      { name: "Crayons", emoji: "🖍️", priceGBP: 2 },
+      { name: "Lunchbox", emoji: "🍱", priceGBP: 6 },
+      { name: "Sunglasses", emoji: "🕶️", priceGBP: 7 },
+      { name: "Hat", emoji: "🧢", priceGBP: 4 },
+      { name: "Stickers", emoji: "⭐", priceGBP: 1 },
+      { name: "Juice box", emoji: "🧃", priceGBP: 1 },
+      { name: "Backpack", emoji: "🎒", priceGBP: 15 },
+      { name: "Trainers", emoji: "👟", priceGBP: 20 },
+      { name: "Watch", emoji: "⌚", priceGBP: 12 },
+      { name: "Headphones", emoji: "🎧", priceGBP: 9 },
+    ];
+
+    const ENCOURAGEMENTS = ["Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨","Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Perfect! 🎯","On fire! 🔥","Legend! 🏆"];
+    const WRONG_MSGS = ["Almost! 💪","So close! 🌟","Oops! No worries! 😊","Keep going! 🚀","Nearly! 🌈","Try again! ✨"];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if(type==="correct"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.1);osc.frequency.setValueAtTime(784,ctx.currentTime+0.2);gain.gain.setValueAtTime(0,ctx.currentTime+0.35);osc.stop(ctx.currentTime+0.35)}
+        else if(type==="wrong"){osc.frequency.value=200;osc.type="sawtooth";osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.3);osc.stop(ctx.currentTime+0.3)}
+        else if(type==="ding"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.15);osc.frequency.setValueAtTime(784,ctx.currentTime+0.3);osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45);gain.gain.setValueAtTime(0,ctx.currentTime+0.7);osc.stop(ctx.currentTime+0.7)}
+        else if(type==="click"){osc.frequency.value=800;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.06);osc.stop(ctx.currentTime+0.06)}
+        else if(type==="coin"){osc.frequency.value=2000+Math.random()*1000;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.05);osc.stop(ctx.currentTime+0.05)}
+      } catch(e){}
+    }
+
+    function Confetti({active}){const[p,setP]=useState([]);useEffect(()=>{if(!active)return;setP(Array.from({length:25},(_,i)=>({id:Date.now()+i,left:Math.random()*100,delay:Math.random()*0.5,emoji:randFrom(["💰","🪙","💵","💷","🌟","✨","🎉","💎"])})));const t=setTimeout(()=>setP([]),3500);return()=>clearTimeout(t)},[active]);return<>{p.map(c=><div key={c.id} className="confetti-piece" style={{left:`${c.left}%`,animationDelay:`${c.delay}s`}}>{c.emoji}</div>)}</>}
+
+    function Btn({children,onClick,color="#3b82f6",big,disabled,active,style:s}){
+      return<button onClick={()=>{if(!disabled){playSound("click");onClick?.()}}} disabled={disabled} style={{
+        padding:big?"14px 28px":"10px 18px",borderRadius:14,border:active?"3px solid #fff":"3px solid transparent",
+        background:disabled?"#cbd5e1":color,color:"#fff",fontWeight:700,fontSize:big?17:14,
+        cursor:disabled?"default":"pointer",boxShadow:disabled?"none":`0 3px 12px ${color}44`,transition:"all 0.2s",...s
+      }}>{children}</button>
+    }
+
+    function BackBar({onBack,title}){return<div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",marginBottom:12}}>
+      <button onClick={()=>{playSound("click");onBack()}} style={{width:36,height:36,borderRadius:10,border:"none",background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"←"}</button>
+      <span style={{fontWeight:700,fontSize:18,color:"#fff"}}>{title}</span>
+    </div>}
+
+    function fmt(val, cur) {
+      const c = CURRENCIES[cur];
+      if (cur === "GBP") return `£${val % 1 === 0 ? val : val.toFixed(2)}`;
+      if (cur === "AED") return `${val % 1 === 0 ? val : val.toFixed(2)} AED`;
+      return `HK$${val % 1 === 0 ? val : val.toFixed(2)}`;
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    function Home({onNav, totalStars}) {
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)",padding:"30px 16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto",textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:8}} className="float">{"💰"}</div>
+          <h1 style={{fontSize:30,fontWeight:800,marginBottom:4}}>Money Master!</h1>
+          <p style={{fontSize:14,opacity:0.8,marginBottom:6}}>Learn about money, change & currency conversion</p>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:24}}>{"⭐"} {totalStars} stars</div>
+
+          <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:24}}>
+            {["GBP","AED","HKD"].map(c => (
+              <div key={c} style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 16px",textAlign:"center"}}>
+                <div style={{fontSize:28}}>{CURRENCIES[c].flag}</div>
+                <div style={{fontSize:11,fontWeight:600,opacity:0.7}}>{CURRENCIES[c].symbol}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:10,textAlign:"left"}}>
+            <ModeCard emoji="🪙" title="Know Your Money" desc="Explore coins and notes from UK, Dubai & Hong Kong"
+              color="#ca8a04" onClick={() => onNav("explore")} />
+            <ModeCard emoji="🧮" title="Count It Up" desc="Add up coins and notes — how much is it worth?"
+              color="#10b981" onClick={() => onNav("count")} />
+            <ModeCard emoji="🛒" title="Making Change" desc="Buy something and work out the change!"
+              color="#3b82f6" onClick={() => onNav("change")} />
+            <ModeCard emoji="🔄" title="Currency Converter" desc="Converting money IS multiplication! £1 = 5 AED = HK$10"
+              color="#f59e0b" onClick={() => onNav("convert")} />
+            <ModeCard emoji="🌍" title="World Shop" desc="Buy items in one country, pay in another currency!"
+              color="#8b5cf6" onClick={() => onNav("worldshop")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    function ModeCard({emoji,title,desc,color,onClick}){
+      return<button onClick={()=>{playSound("click");onClick()}} style={{
+        display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",
+        color:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.2s"
+      }}>
+        <div style={{width:50,height:50,borderRadius:14,background:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{emoji}</div>
+        <div><div style={{fontWeight:700,fontSize:16,marginBottom:2}}>{title}</div><div style={{fontSize:12,opacity:0.7}}>{desc}</div></div>
+      </button>;
+    }
+
+    // ─── EXPLORE MONEY ──────────────────────────────────────────────
+    function ExploreMode({onBack}) {
+      const [cur, setCur] = useState("GBP");
+      const c = CURRENCIES[cur];
+
+      return<div style={{minHeight:"100vh",background:`linear-gradient(135deg, ${c.color} 0%, ${c.color}cc 100%)`,padding:"20px 16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Know Your Money" />
+
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            {["GBP","AED","HKD"].map(k => (
+              <button key={k} onClick={()=>{playSound("click");setCur(k)}} style={{
+                flex:1,padding:"10px 8px",borderRadius:12,border:cur===k?"3px solid #fff":"3px solid transparent",
+                background:cur===k?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.08)",
+                color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13,textAlign:"center"
+              }}>{CURRENCIES[k].flag} {k}</button>
+            ))}
+          </div>
+
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <div style={{fontSize:36}}>{c.flag}</div>
+            <div style={{fontSize:20,fontWeight:800}}>{c.name}</div>
+            <div style={{fontSize:14,opacity:0.7}}>Symbol: {c.symbol}</div>
+          </div>
+
+          {/* Coins */}
+          <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>{"🪙"} Coins</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center"}}>
+              {c.coins.map((coin,i) => (
+                <div key={i} className="pop-in" style={{textAlign:"center",animationDelay:`${i*50}ms`}}>
+                  <div style={{
+                    width:coin.size*1.4,height:coin.size*1.4,borderRadius:coin.shape==="heptagon"?"30% 70% 30% 70%":"50%",
+                    background:`radial-gradient(circle at 35% 35%, ${coin.color}dd, ${coin.color})`,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:coin.size > 30 ? 12 : 10,fontWeight:800,color:"#fff",
+                    boxShadow:`0 3px 8px ${coin.color}66, inset 0 1px 2px rgba(255,255,255,0.3)`,
+                    margin:"0 auto 4px",border:"2px solid rgba(255,255,255,0.2)"
+                  }}>{coin.label}</div>
+                  <div style={{fontSize:12,fontWeight:600}}>{fmt(coin.value, cur)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>{"💵"} Notes</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {c.notes.map((note,i) => (
+                <div key={i} className="fade-slide" style={{
+                  background:`linear-gradient(135deg, ${note.color} 0%, ${note.color}cc 100%)`,
+                  borderRadius:12,padding:"12px 16px",display:"flex",justifyContent:"space-between",
+                  alignItems:"center",boxShadow:`0 3px 12px ${note.color}44`,
+                  animationDelay:`${i*60}ms`
+                }}>
+                  <div style={{fontSize:18,fontWeight:800}}>{note.label}</div>
+                  <div style={{fontSize:13,opacity:0.8}}>{fmt(note.value, cur)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fun facts */}
+          <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16}}>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>{"💡"} Did you know?</div>
+            <div style={{fontSize:13,opacity:0.9,lineHeight:1.7}}>
+              {cur==="GBP" && <>The pound sterling is one of the oldest currencies still in use! The "p" in coins stands for "pence". There are 100 pence in £1. The 20p and 50p coins have 7 sides!</>}
+              {cur==="AED" && <>AED stands for "Arab Emirates Dirham". There are 100 fils in 1 dirham, but you'll mostly see 25 fils and 50 fils coins. The notes have beautiful pictures of UAE landmarks!</>}
+              {cur==="HKD" && <>Hong Kong dollars have coins up to $10! Some coins have Chinese writing on them. The notes come in many colours and are made by different banks.</>}
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── COUNT IT UP ────────────────────────────────────────────────
+    function CountMode({onBack, addStars}) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const cur = randFrom(["GBP","AED","HKD"]);
+        const c = CURRENCIES[cur];
+        // Pick 3-6 random coins/notes
+        const allMoney = [...c.coins, ...c.notes.slice(0,3)];
+        const count = 3 + Math.floor(Math.random()*4);
+        const items = Array.from({length:count}, () => randFrom(allMoney));
+        const total = items.reduce((s,m) => s + m.value, 0);
+        setQ({ cur, items, total: Math.round(total*100)/100 });
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => { generate(); }, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseFloat(input);
+        if (Math.abs(val - q.total) < 0.01) {
+          playSound("correct"); addStars(1);
+          setFeedback({correct:true,msg:randFrom(ENCOURAGEMENTS)});
+          setScore(s=>({c:s.c+1,t:s.t+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({correct:false,msg:randFrom(WRONG_MSGS)});
+          setScore(s=>({...s,t:s.t+1}));
+        }
+      };
+      const handleKey = (e) => {if(e.key==="Enter"){if(feedback)generate();else submit()}};
+
+      if (!q) return null;
+      const c = CURRENCIES[q.cur];
+
+      return<div style={{minHeight:"100vh",background:`linear-gradient(135deg, ${c.color} 0%, ${c.color}cc 100%)`,padding:"20px 16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Count It Up" />
+          <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:8}}>{score.c}/{score.t} correct • {c.flag} {c.name}</div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff",borderRadius:24,padding:"24px 20px",color:"#1e293b",
+            marginBottom:16,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",textAlign:"center"
+          }}>
+            <div style={{fontSize:15,color:"#64748b",marginBottom:12}}>How much money is this?</div>
+
+            {/* Show coins/notes */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center",marginBottom:16}}>
+              {q.items.map((item,i) => {
+                const isNote = item.value >= (q.cur==="HKD"?10:5);
+                if (isNote) {
+                  return <div key={i} className="pop-in" style={{
+                    background:`linear-gradient(135deg, ${item.color||c.color} 0%, ${item.color||c.color}cc 100%)`,
+                    borderRadius:10,padding:"10px 16px",color:"#fff",fontWeight:700,fontSize:14,
+                    boxShadow:`0 3px 8px ${item.color||c.color}44`,animationDelay:`${i*80}ms`,
+                    minWidth:70,textAlign:"center"
+                  }}>{item.label}</div>;
+                }
+                return <div key={i} className="pop-in" style={{
+                  width:item.size?item.size*1.3:36,height:item.size?item.size*1.3:36,
+                  borderRadius:item.shape==="heptagon"?"30% 70% 30% 70%":"50%",
+                  background:`radial-gradient(circle at 35% 35%, ${item.color}dd, ${item.color})`,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:10,fontWeight:800,color:"#fff",animationDelay:`${i*80}ms`,
+                  boxShadow:`0 3px 8px ${item.color}44, inset 0 1px 2px rgba(255,255,255,0.3)`,
+                  border:"2px solid rgba(255,255,255,0.3)"
+                }}>{item.label}</div>;
+              })}
+            </div>
+
+            <div style={{fontSize:14,color:"#94a3b8",marginBottom:12}}>
+              Add them up! Answer in {q.cur==="GBP"?"pounds (e.g. 3.50)":q.cur==="AED"?"dirhams":"HK dollars"}
+            </div>
+
+            {!feedback && (
+              <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+                <span style={{fontSize:18,fontWeight:700,color:c.color}}>{c.symbol}</span>
+                <input ref={inputRef} type="number" step="0.01" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                    borderRadius:12,border:`3px solid ${c.color}`,outline:"none"
+                  }} />
+                <Btn onClick={submit} color={c.color} disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{fontSize:20,fontWeight:800,color:feedback.correct?"#10b981":"#ef4444",marginBottom:6}}>
+                {feedback.correct ? feedback.msg : "Not quite!"}
+              </div>
+              <div style={{fontSize:16,fontWeight:700,color:"#1e293b",marginBottom:4}}>
+                Total: {fmt(q.total, q.cur)}
+              </div>
+              {!feedback.correct && (
+                <div style={{fontSize:13,color:"#64748b"}}>
+                  {q.items.map((m,i) => fmt(m.value,q.cur)).join(" + ")} = {fmt(q.total,q.cur)}
+                </div>
+              )}
+              <div style={{marginTop:12}}><Btn onClick={generate} color={c.color} big>Next →</Btn></div>
+            </div>}
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── MAKING CHANGE ──────────────────────────────────────────────
+    function ChangeMode({onBack, addStars}) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const cur = randFrom(["GBP","AED","HKD"]);
+        const item = randFrom(SHOP_ITEMS);
+        let price, paid;
+        if (cur === "GBP") {
+          price = item.priceGBP;
+          const payOptions = [5,10,20,50].filter(n => n >= price);
+          paid = payOptions.length ? payOptions[0] : 50;
+        } else if (cur === "AED") {
+          price = item.priceGBP * 5;
+          const payOptions = [10,20,50,100,200].filter(n => n >= price);
+          paid = payOptions.length ? payOptions[0] : 200;
+        } else {
+          price = item.priceGBP * 10;
+          const payOptions = [20,50,100,500].filter(n => n >= price);
+          paid = payOptions.length ? payOptions[0] : 500;
+        }
+        const change = paid - price;
+        setQ({cur, item, price, paid, change});
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => {generate()}, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        const val = parseFloat(input);
+        if (Math.abs(val - q.change) < 0.01) {
+          playSound("correct"); addStars(1);
+          setFeedback({correct:true,msg:randFrom(ENCOURAGEMENTS)});
+          setScore(s=>({c:s.c+1,t:s.t+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({correct:false});
+          setScore(s=>({...s,t:s.t+1}));
+        }
+      };
+      const handleKey = (e) => {if(e.key==="Enter"){if(feedback)generate();else submit()}};
+
+      if (!q) return null;
+      const c = CURRENCIES[q.cur];
+
+      return<div style={{minHeight:"100vh",background:`linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)`,padding:"20px 16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Making Change" />
+          <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:8}}>{score.c}/{score.t} correct</div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff",borderRadius:24,padding:"24px 20px",color:"#1e293b",
+            marginBottom:16,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",textAlign:"center"
+          }}>
+            <div style={{fontSize:48,marginBottom:8}}>{q.item.emoji}</div>
+            <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{q.item.name}</div>
+            <div style={{fontSize:14,color:"#64748b",marginBottom:16}}>
+              {c.flag} Price: <strong style={{color:c.color,fontSize:18}}>{fmt(q.price, q.cur)}</strong>
+            </div>
+
+            <div style={{background:"#f8fafc",borderRadius:14,padding:16,marginBottom:16}}>
+              <div style={{fontSize:14,color:"#64748b",marginBottom:4}}>You pay with:</div>
+              <div style={{fontSize:28,fontWeight:800,color:c.color}}>{fmt(q.paid, q.cur)}</div>
+            </div>
+
+            <div style={{fontSize:16,fontWeight:700,color:"#1e293b",marginBottom:12}}>
+              How much change do you get back?
+            </div>
+
+            {!feedback && (
+              <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+                <span style={{fontSize:16,fontWeight:700,color:c.color}}>{c.symbol}</span>
+                <input ref={inputRef} type="number" step="0.01" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                    borderRadius:12,border:"3px solid #3b82f6",outline:"none"
+                  }} />
+                <Btn onClick={submit} color="#3b82f6" disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{fontSize:20,fontWeight:800,color:feedback.correct?"#10b981":"#ef4444",marginBottom:6}}>
+                {feedback.correct ? feedback.msg : "Not quite!"}
+              </div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>
+                Change: {fmt(q.change, q.cur)}
+              </div>
+              <div style={{fontSize:13,color:"#64748b"}}>
+                {fmt(q.paid,q.cur)} − {fmt(q.price,q.cur)} = {fmt(q.change,q.cur)}
+              </div>
+              <div style={{marginTop:12}}><Btn onClick={generate} color="#3b82f6" big>Next →</Btn></div>
+            </div>}
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── CURRENCY CONVERTER ─────────────────────────────────────────
+    function ConvertMode({onBack, addStars}) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const [showLearn, setShowLearn] = useState(true);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        // Only do "multiply" conversions (not division ones like HKD_GBP)
+        const pairs = ["GBP_AED","GBP_HKD","AED_HKD"];
+        const pair = randFrom(pairs);
+        const [from, to] = pair.split("_");
+        const rate = RATES[pair];
+        // Use whole numbers for the amount
+        const amount = Math.floor(Math.random()*12)+1;
+        const answer = amount * rate;
+        setQ({from, to, amount, rate, answer, pair});
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => {if(!showLearn) generate()}, [showLearn, generate]);
+
+      if (showLearn) {
+        return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)",padding:"20px 16px",color:"#fff"}}>
+          <div style={{maxWidth:500,margin:"0 auto"}}>
+            <BackBar onBack={onBack} title="Currency Converter" />
+
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{fontSize:48,marginBottom:8}}>{"🔄"}</div>
+              <h2 style={{fontSize:22,fontWeight:800,marginBottom:8}}>Converting money = multiplication!</h2>
+            </div>
+
+            {/* Rate cards */}
+            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+              <RateCard from="GBP" to="AED" rate={5} example="£3 = 3 × 5 = 15 AED"
+                visual="£1 → 💰💰💰💰💰 = 5 AED" />
+              <RateCard from="GBP" to="HKD" rate={10} example="£3 = 3 × 10 = HK$30"
+                visual="£1 → 💰💰💰💰💰💰💰💰💰💰 = HK$10" />
+              <RateCard from="AED" to="HKD" rate={2} example="4 AED = 4 × 2 = HK$8"
+                visual="1 AED → 💰💰 = HK$2" />
+            </div>
+
+            <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:18,marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:8}}>{"🧠"} Why is this multiplication?</div>
+              <div style={{fontSize:13,lineHeight:1.8,opacity:0.9}}>
+                If 1 pound = 5 dirhams, then:<br/>
+                • 2 pounds = 2 × 5 = <strong>10 dirhams</strong><br/>
+                • 3 pounds = 3 × 5 = <strong>15 dirhams</strong><br/>
+                • 7 pounds = 7 × 5 = <strong>35 dirhams</strong><br/><br/>
+                It's just your <strong>×5 table</strong>! And going to HK$ is your <strong>×10 table</strong>!<br/><br/>
+                Going the other way is <strong>division</strong>:<br/>
+                • 20 AED ÷ 5 = <strong>£4</strong><br/>
+                • HK$50 ÷ 10 = <strong>£5</strong>
+              </div>
+            </div>
+
+            <div style={{textAlign:"center"}}>
+              <Btn onClick={() => setShowLearn(false)} color="#fff" big style={{color:"#92400e"}}>
+                Let's practise! 🎯
+              </Btn>
+            </div>
+          </div>
+        </div>;
+      }
+
+      if (!q) return null;
+      const fromC = CURRENCIES[q.from];
+      const toC = CURRENCIES[q.to];
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)",padding:"20px 16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Currency Converter" />
+          <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:8}}>{score.c}/{score.t} correct</div>
+
+          {/* Rate reminder */}
+          <div style={{textAlign:"center",marginBottom:12}}>
+            <div style={{display:"inline-block",background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"6px 14px",fontSize:13,fontWeight:600}}>
+              {fromC.flag} 1 {fromC.symbol} = {q.rate} {toC.symbol} {toC.flag} ({RATE_DESC[q.pair].mult})
+            </div>
+          </div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff",borderRadius:24,padding:"28px 20px",color:"#1e293b",
+            marginBottom:16,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",textAlign:"center"
+          }}>
+            {/* Visual conversion */}
+            <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+              <div style={{background:fromC.bg,borderRadius:14,padding:"12px 20px",textAlign:"center"}}>
+                <div style={{fontSize:13,color:fromC.color,fontWeight:600,marginBottom:2}}>{fromC.flag} {q.from}</div>
+                <div style={{fontSize:28,fontWeight:800,color:fromC.color}}>{fmt(q.amount, q.from)}</div>
+              </div>
+              <div style={{fontSize:28}}>{"→"}</div>
+              <div style={{background:toC.bg,borderRadius:14,padding:"12px 20px",textAlign:"center"}}>
+                <div style={{fontSize:13,color:toC.color,fontWeight:600,marginBottom:2}}>{toC.flag} {q.to}</div>
+                <div style={{fontSize:28,fontWeight:800,color:toC.color}}>{"?"}</div>
+              </div>
+            </div>
+
+            <div style={{fontSize:14,color:"#94a3b8",marginBottom:12}}>
+              {"💡"} Think: {q.amount} × {q.rate} = ?
+            </div>
+
+            {!feedback && (
+              <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+                <span style={{fontSize:15,fontWeight:700,color:toC.color}}>{toC.symbol}</span>
+                <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                    borderRadius:12,border:`3px solid ${toC.color}`,outline:"none"
+                  }} />
+                <Btn onClick={submit} color={toC.color} disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{fontSize:20,fontWeight:800,color:feedback.correct?"#10b981":"#ef4444",marginBottom:6}}>
+                {feedback.correct ? feedback.msg : "Not quite!"}
+              </div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>
+                {fmt(q.amount,q.from)} = {fmt(q.answer,q.to)}
+              </div>
+              <div style={{fontSize:13,color:"#64748b"}}>
+                {q.amount} × {q.rate} = {q.answer}
+              </div>
+              <div style={{marginTop:12}}><Btn onClick={generate} color="#f59e0b" big>Next →</Btn></div>
+            </div>}
+          </div>
+        </div>
+      </div>;
+
+      function submit() {
+        if (!input) return;
+        if (Math.abs(parseFloat(input) - q.answer) < 0.01) {
+          playSound("correct"); addStars(2);
+          setFeedback({correct:true,msg:randFrom(ENCOURAGEMENTS)});
+          setScore(s=>({c:s.c+1,t:s.t+1}));
+        } else {
+          playSound("wrong");
+          setFeedback({correct:false});
+          setScore(s=>({...s,t:s.t+1}));
+        }
+      }
+      function handleKey(e){if(e.key==="Enter"){if(feedback)generate();else submit()}}
+    }
+
+    function RateCard({from,to,rate,example,visual}) {
+      const f=CURRENCIES[from], t=CURRENCIES[to];
+      return<div style={{background:"rgba(255,255,255,0.12)",borderRadius:14,padding:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:24}}>{f.flag}</span>
+          <span style={{fontSize:18}}>{"→"}</span>
+          <span style={{fontSize:24}}>{t.flag}</span>
+          <span style={{fontWeight:800,fontSize:18,marginLeft:8}}>× {rate}</span>
+        </div>
+        <div style={{fontSize:13,opacity:0.9,marginBottom:4}}>{visual}</div>
+        <div style={{fontSize:13,fontWeight:600}}>Example: {example}</div>
+      </div>;
+    }
+
+    // ─── WORLD SHOP ─────────────────────────────────────────────────
+    function WorldShop({onBack, addStars}) {
+      const [q, setQ] = useState(null);
+      const [input, setInput] = useState("");
+      const [feedback, setFeedback] = useState(null);
+      const [score, setScore] = useState({c:0,t:0});
+      const [confetti, setConfetti] = useState(false);
+      const inputRef = useRef();
+
+      const generate = useCallback(() => {
+        const item = randFrom(SHOP_ITEMS);
+        // Item priced in one currency, must pay in another
+        const scenarios = [
+          {priceCur:"GBP",payCur:"AED",price:item.priceGBP,rate:5},
+          {priceCur:"GBP",payCur:"HKD",price:item.priceGBP,rate:10},
+          {priceCur:"AED",payCur:"HKD",price:item.priceGBP*5,rate:2},
+          // Reverse: price in foreign, convert to GBP (division!)
+          {priceCur:"AED",payCur:"GBP",price:item.priceGBP*5,rate:0.2},
+          {priceCur:"HKD",payCur:"GBP",price:item.priceGBP*10,rate:0.1},
+        ];
+        const sc = randFrom(scenarios);
+        const answer = Math.round(sc.price * sc.rate * 100) / 100;
+        const pair = `${sc.priceCur}_${sc.payCur}`;
+        const isDivision = sc.rate < 1;
+        const divRate = isDivision ? Math.round(1/sc.rate) : sc.rate;
+        setQ({...sc, item, answer, pair, isDivision, divRate});
+        setInput(""); setFeedback(null);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }, []);
+
+      useEffect(() => {generate()}, [generate]);
+
+      const submit = () => {
+        if (!input) return;
+        if (Math.abs(parseFloat(input) - q.answer) < 0.01) {
+          playSound("correct"); addStars(2);
+          setFeedback({correct:true,msg:randFrom(ENCOURAGEMENTS)});
+          setScore(s=>({c:s.c+1,t:s.t+1}));
+          setConfetti(true); setTimeout(()=>setConfetti(false),100);
+        } else {
+          playSound("wrong");
+          setFeedback({correct:false});
+          setScore(s=>({...s,t:s.t+1}));
+        }
+      };
+      const handleKey = (e) => {if(e.key==="Enter"){if(feedback)generate();else submit()}};
+
+      if (!q) return null;
+      const priceC = CURRENCIES[q.priceCur];
+      const payC = CURRENCIES[q.payCur];
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)",padding:"20px 16px",color:"#fff"}}>
+        <Confetti active={confetti} />
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="World Shop" />
+          <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:8}}>{score.c}/{score.t} correct</div>
+
+          <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
+            background:"#fff",borderRadius:24,padding:"24px 20px",color:"#1e293b",
+            marginBottom:16,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",textAlign:"center"
+          }}>
+            <div style={{fontSize:48,marginBottom:6}}>{q.item.emoji}</div>
+            <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{q.item.name}</div>
+
+            <div style={{display:"flex",justifyContent:"center",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+              <div style={{background:priceC.bg,borderRadius:12,padding:"8px 14px"}}>
+                <div style={{fontSize:11,color:priceC.color,fontWeight:600}}>{priceC.flag} Price</div>
+                <div style={{fontSize:22,fontWeight:800,color:priceC.color}}>{fmt(q.price,q.priceCur)}</div>
+              </div>
+              <div style={{fontSize:22}}>{"→"}</div>
+              <div style={{background:payC.bg,borderRadius:12,padding:"8px 14px"}}>
+                <div style={{fontSize:11,color:payC.color,fontWeight:600}}>{payC.flag} Pay in</div>
+                <div style={{fontSize:22,fontWeight:800,color:payC.color}}>?</div>
+              </div>
+            </div>
+
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:12}}>
+              {"💡"} {q.isDivision
+                ? `Think: ${q.price} ÷ ${q.divRate} = ?`
+                : `Think: ${q.price} × ${q.rate} = ?`
+              }
+            </div>
+
+            {!feedback && (
+              <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+                <span style={{fontSize:15,fontWeight:700,color:payC.color}}>{payC.symbol}</span>
+                <input ref={inputRef} type="number" step="0.01" value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={handleKey} autoFocus style={{
+                    width:100,padding:"10px",fontSize:24,fontWeight:800,textAlign:"center",
+                    borderRadius:12,border:`3px solid ${payC.color}`,outline:"none"
+                  }} />
+                <Btn onClick={submit} color={payC.color} disabled={!input}>Go!</Btn>
+              </div>
+            )}
+
+            {feedback && <div className="fade-slide">
+              <div style={{fontSize:20,fontWeight:800,color:feedback.correct?"#10b981":"#ef4444",marginBottom:6}}>
+                {feedback.correct ? feedback.msg : "Not quite!"}
+              </div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>
+                {fmt(q.price,q.priceCur)} = {fmt(q.answer,q.payCur)}
+              </div>
+              <div style={{fontSize:13,color:"#64748b"}}>
+                {q.isDivision
+                  ? `${q.price} ÷ ${q.divRate} = ${q.answer}`
+                  : `${q.price} × ${q.rate} = ${q.answer}`
+                }
+              </div>
+              <div style={{marginTop:12}}><Btn onClick={generate} color="#8b5cf6" big>Next →</Btn></div>
+            </div>}
+          </div>
+
+          {/* Rate reference */}
+          <div style={{background:"rgba(255,255,255,0.1)",borderRadius:14,padding:14}}>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{"📋"} Exchange rates</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[["🇬🇧→🇦🇪","£1 = 5 AED","×5"],["🇬🇧→🇭🇰","£1 = HK$10","×10"],["🇦🇪→🇭🇰","1 AED = HK$2","×2"]].map(([flags,rate,op],i) => (
+                <div key={i} style={{flex:1,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 8px",textAlign:"center",minWidth:100}}>
+                  <div style={{fontSize:12}}>{flags}</div>
+                  <div style={{fontSize:11,fontWeight:600}}>{rate}</div>
+                  <div style={{fontSize:10,opacity:0.7}}>{op}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(() => {
+        try{return parseInt(localStorage.getItem("money_stars")||"0")}catch{return 0}
+      });
+      const addStars = (n) => setTotalStars(prev => {
+        const next = prev+n; try{localStorage.setItem("money_stars",next)}catch{} return next;
+      });
+      const goHome = () => setScreen("home");
+
+      switch(screen) {
+        case "explore": return<ExploreMode onBack={goHome} />;
+        case "count": return<CountMode onBack={goHome} addStars={addStars} />;
+        case "change": return<ChangeMode onBack={goHome} addStars={addStars} />;
+        case "convert": return<ConvertMode onBack={goHome} addStars={addStars} />;
+        case "worldshop": return<WorldShop onBack={goHome} addStars={addStars} />;
+        default: return<Home onNav={setScreen} totalStars={totalStars} />;
+      }
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
