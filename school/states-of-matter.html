@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>States of Matter!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+    input[type=range] { -webkit-appearance: none; width: 100%; height: 12px; border-radius: 6px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Wow! 🚀",
+      "Perfect! 🎯","On fire! 🔥","Legend! 🏆","Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if(type==="correct"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.1);osc.frequency.setValueAtTime(784,ctx.currentTime+0.2);gain.gain.setValueAtTime(0,ctx.currentTime+0.35);osc.stop(ctx.currentTime+0.35)}
+        else if(type==="wrong"){osc.frequency.value=200;osc.type="sawtooth";osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.3);osc.stop(ctx.currentTime+0.3)}
+        else if(type==="levelup"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.15);osc.frequency.setValueAtTime(784,ctx.currentTime+0.3);osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45);gain.gain.setValueAtTime(0,ctx.currentTime+0.7);osc.stop(ctx.currentTime+0.7)}
+        else if(type==="click"){osc.frequency.value=800;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.06);osc.stop(ctx.currentTime+0.06)}
+        else if(type==="bubble"){osc.frequency.value=400+Math.random()*600;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.08);osc.stop(ctx.currentTime+0.08)}
+        else if(type==="heat"){osc.frequency.value=150;osc.type="sawtooth";gain.gain.value=0.06;osc.start();osc.frequency.setValueAtTime(300,ctx.currentTime+0.2);gain.gain.setValueAtTime(0,ctx.currentTime+0.3);osc.stop(ctx.currentTime+0.3)}
+        else if(type==="cool"){osc.frequency.value=800;osc.type="sine";osc.start();osc.frequency.setValueAtTime(400,ctx.currentTime+0.2);gain.gain.setValueAtTime(0,ctx.currentTime+0.3);osc.stop(ctx.currentTime+0.3)}
+      } catch(e){}
+    }
+
+    function getStars() { try { return parseInt(localStorage.getItem("matter_stars"))||0; } catch(e) { return 0; } }
+    function addStars(n) { const s = getStars()+n; try { localStorage.setItem("matter_stars", s); } catch(e){} return s; }
+
+    function Confetti({active}){const[p,setP]=useState([]);useEffect(()=>{if(!active)return;setP(Array.from({length:25},(_,i)=>({id:Date.now()+i,left:Math.random()*100,delay:Math.random()*0.5,emoji:randFrom(["🌟","⭐","🎉","✨","💖","🧊","💧","♨️","🔥","❄️"])})));const t=setTimeout(()=>setP([]),3500);return()=>clearTimeout(t)},[active]);return<>{p.map(c=><div key={c.id} className="confetti-piece" style={{left:`${c.left}%`,animationDelay:`${c.delay}s`}}>{c.emoji}</div>)}</>}
+
+    function Btn({children,onClick,color="#3b82f6",big,disabled,active,style:s}){
+      return<button onClick={()=>{if(!disabled){playSound("click");onClick?.()}}} disabled={disabled} style={{
+        padding:big?"14px 28px":"10px 18px",borderRadius:14,border:active?"3px solid #fff":"3px solid transparent",
+        background:disabled?"#cbd5e1":color,color:"#fff",fontWeight:700,fontSize:big?17:14,
+        cursor:disabled?"default":"pointer",boxShadow:disabled?"none":`0 3px 12px ${color}44`,transition:"all 0.2s",...s
+      }}>{children}</button>
+    }
+
+    function BackBar({onBack,title}){return<div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",marginBottom:12}}>
+      <button onClick={()=>{playSound("click");onBack()}} style={{width:36,height:36,borderRadius:10,border:"none",background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{"←"}</button>
+      <span style={{fontWeight:700,fontSize:18,color:"#fff"}}>{title}</span>
+    </div>}
+
+    function ModeCard({emoji,title,desc,color,onClick}){
+      return<button onClick={()=>{playSound("click");onClick()}} style={{
+        display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",
+        color:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.2s",width:"100%"
+      }}>
+        <div style={{width:50,height:50,borderRadius:14,background:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{emoji}</div>
+        <div><div style={{fontWeight:700,fontSize:16,marginBottom:2}}>{title}</div><div style={{fontSize:12,opacity:0.7}}>{desc}</div></div>
+      </button>;
+    }
+
+    // ─── PARTICLE VISUALISER ──────────────────────────────────────
+    function ParticleBox({ state, width=280, height=200 }) {
+      const canvasRef = useRef(null);
+      const particlesRef = useRef([]);
+      const animRef = useRef(null);
+      const NUM = 20;
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const W = width, H = height;
+
+        // Initialise particles
+        if (particlesRef.current.length === 0) {
+          particlesRef.current = Array.from({length:NUM}, (_, i) => ({
+            x: W/2 + (i%5 -2)*18, y: H/2 + (Math.floor(i/5)-2)*18,
+            vx: 0, vy: 0, baseX: W/2 + (i%5 -2)*18, baseY: H/2 + (Math.floor(i/5)-2)*18,
+          }));
+        }
+
+        const particles = particlesRef.current;
+
+        function animate() {
+          ctx.clearRect(0,0,W,H);
+
+          // Background
+          if (state === "solid") {
+            ctx.fillStyle = "rgba(59,130,246,0.12)";
+          } else if (state === "liquid") {
+            ctx.fillStyle = "rgba(99,102,241,0.12)";
+          } else {
+            ctx.fillStyle = "rgba(249,115,22,0.12)";
+          }
+          ctx.fillRect(0,0,W,H);
+
+          // Container outline
+          ctx.strokeStyle = "rgba(255,255,255,0.3)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(2,2,W-4,H-4);
+
+          for (let p of particles) {
+            if (state === "solid") {
+              // Tight grid, small vibration
+              p.x = p.baseX + (Math.random()-0.5)*3;
+              p.y = p.baseY + (Math.random()-0.5)*3;
+              // Keep in grid
+              const gridX = W*0.3 + ((particles.indexOf(p))%5)*22;
+              const gridY = H*0.3 + Math.floor(particles.indexOf(p)/5)*22;
+              p.baseX += (gridX - p.baseX)*0.05;
+              p.baseY += (gridY - p.baseY)*0.05;
+            } else if (state === "liquid") {
+              // Move around slowly, stay in bottom half
+              p.vx += (Math.random()-0.5)*0.5;
+              p.vy += (Math.random()-0.5)*0.5 + 0.1;
+              p.vx *= 0.95; p.vy *= 0.95;
+              p.x += p.vx; p.y += p.vy;
+              if (p.x < 10) { p.x = 10; p.vx *= -0.5; }
+              if (p.x > W-10) { p.x = W-10; p.vx *= -0.5; }
+              if (p.y < H*0.4) { p.vy += 0.3; }
+              if (p.y > H-10) { p.y = H-10; p.vy *= -0.5; }
+            } else {
+              // Gas: fast, everywhere
+              p.vx += (Math.random()-0.5)*1.5;
+              p.vy += (Math.random()-0.5)*1.5;
+              p.vx *= 0.96; p.vy *= 0.96;
+              p.x += p.vx; p.y += p.vy;
+              if (p.x < 8) { p.x = 8; p.vx *= -1; }
+              if (p.x > W-8) { p.x = W-8; p.vx *= -1; }
+              if (p.y < 8) { p.y = 8; p.vy *= -1; }
+              if (p.y > H-8) { p.y = H-8; p.vy *= -1; }
+            }
+
+            // Draw particle
+            const colors = { solid: "#60a5fa", liquid: "#818cf8", gas: "#fb923c" };
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+            ctx.fillStyle = colors[state] || "#60a5fa";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.5)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+
+          animRef.current = requestAnimationFrame(animate);
+        }
+
+        animate();
+        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+      }, [state, width, height]);
+
+      return <canvas ref={canvasRef} width={width} height={height} style={{borderRadius:12,display:"block"}} />;
+    }
+
+    // ─── LEARN MODE ─────────────────────────────────────────────
+    function LearnMode({ onBack }) {
+      const [tab, setTab] = useState("solid");
+      const [temp, setTemp] = useState(25);
+
+      const tempState = temp < 0 ? "solid" : temp < 100 ? "liquid" : "gas";
+
+      const info = {
+        solid: { emoji: "🧊", title: "SOLID", color: "#3b82f6",
+          desc: "Particles are packed closely together in a fixed pattern. They vibrate in place but don't move around.",
+          shape: "Fixed shape — stays the same!",
+          examples: "Ice, wood, rock, chocolate, metal, glass",
+          keywords: ["particles", "vibrate", "fixed shape", "tightly packed"]
+        },
+        liquid: { emoji: "💧", title: "LIQUID", color: "#6366f1",
+          desc: "Particles are close together but can slide past each other and move around.",
+          shape: "Takes the shape of its container!",
+          examples: "Water, milk, juice, oil, honey, shampoo",
+          keywords: ["flow", "pour", "takes shape of container"]
+        },
+        gas: { emoji: "♨️", title: "GAS", color: "#f97316",
+          desc: "Particles are far apart and move very fast in all directions. They spread out to fill the whole space!",
+          shape: "Fills up all the space available!",
+          examples: "Steam, air, helium, oxygen",
+          keywords: ["expand", "spread out", "fast-moving", "fill the space"]
+        },
+      };
+
+      const i = info[tab];
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Learn About Matter" />
+
+          <div style={{display:"flex",gap:6,marginBottom:16}}>
+            {["solid","liquid","gas"].map(s => (
+              <button key={s} onClick={()=>{playSound("click");setTab(s)}} style={{
+                flex:1,padding:"10px 6px",borderRadius:12,border:tab===s?"2px solid #fff":"2px solid transparent",
+                background:info[s].color+"33",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"
+              }}>{info[s].emoji} {info[s].title}</button>
+            ))}
+          </div>
+
+          <div className="fade-slide" key={tab} style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:20,marginBottom:16}}>
+            <div style={{textAlign:"center",fontSize:40,marginBottom:8}}>{i.emoji}</div>
+            <h2 style={{textAlign:"center",fontSize:22,fontWeight:800,marginBottom:10,color:i.color}}>{i.title}</h2>
+            <p style={{fontSize:14,lineHeight:1.6,marginBottom:12,textAlign:"center"}}>{i.desc}</p>
+
+            <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+              <ParticleBox state={tab} width={260} height={170} />
+            </div>
+
+            <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:12,marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:700,opacity:0.7,marginBottom:4}}>📐 Shape</div>
+              <div style={{fontSize:14}}>{i.shape}</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:12,marginBottom:10}}>
+              <div style={{fontSize:12,fontWeight:700,opacity:0.7,marginBottom:4}}>💡 Examples</div>
+              <div style={{fontSize:14}}>{i.examples}</div>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {i.keywords.map(k => <span key={k} style={{background:i.color+"44",padding:"4px 10px",borderRadius:20,fontSize:12,fontWeight:600}}>{k}</span>)}
+            </div>
+          </div>
+
+          {/* Temperature Slider */}
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:20}}>
+            <h3 style={{fontSize:16,fontWeight:700,marginBottom:12,textAlign:"center"}}>🌡️ Temperature Slider</h3>
+            <p style={{fontSize:13,opacity:0.8,marginBottom:14,textAlign:"center"}}>Drag the slider and watch how particles change!</p>
+
+            <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+              <ParticleBox state={tempState} width={260} height={140} />
+            </div>
+
+            <div style={{position:"relative",marginBottom:8}}>
+              <input type="range" min={-30} max={130} value={temp}
+                onChange={e => setTemp(Number(e.target.value))}
+                style={{
+                  width:"100%",
+                  background:`linear-gradient(to right, #3b82f6, #6366f1, #f97316)`,
+                }} />
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,opacity:0.7}}>
+              <span>❄️ -30°C</span>
+              <span style={{fontWeight:700,fontSize:16,color: tempState==="solid"?"#60a5fa":tempState==="liquid"?"#818cf8":"#fb923c"}}>
+                {temp}°C — {tempState.toUpperCase()}
+              </span>
+              <span>🔥 130°C</span>
+            </div>
+            <div style={{textAlign:"center",marginTop:8,fontSize:13,opacity:0.8}}>
+              {temp < 0 && "Below 0°C: Water freezes into ice (solid)"}
+              {temp >= 0 && temp < 100 && "Between 0°C and 100°C: Water is a liquid"}
+              {temp >= 100 && "Above 100°C: Water boils into steam (gas)"}
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── SORT IT MODE ───────────────────────────────────────────
+    const SORT_ITEMS = [
+      { name: "Ice cube", emoji: "🧊", answer: "solid", explain: "Ice is frozen water — a solid!" },
+      { name: "Water", emoji: "💧", answer: "liquid", explain: "Water flows and takes the shape of its container." },
+      { name: "Steam", emoji: "♨️", answer: "gas", explain: "Steam is water heated into a gas — it spreads everywhere!" },
+      { name: "Rock", emoji: "🪨", answer: "solid", explain: "Rock has a fixed shape — it's definitely solid!" },
+      { name: "Milk", emoji: "🥛", answer: "liquid", explain: "Milk flows and pours — it's a liquid!" },
+      { name: "Air", emoji: "💨", answer: "gas", explain: "Air is invisible gas all around us!" },
+      { name: "Honey", emoji: "🍯", answer: "liquid", explain: "Honey is very thick (viscous) but it still flows — it's a liquid!" },
+      { name: "Sand", emoji: "⏳", answer: "solid", explain: "Tricky! Sand pours like liquid, but each tiny grain is a solid!" },
+      { name: "Oil", emoji: "🫒", answer: "liquid", explain: "Oil flows and pours — it's a liquid!" },
+      { name: "Fog", emoji: "🌫️", answer: "liquid", explain: "Tricky! Fog is actually tiny droplets of liquid water floating in air!" },
+      { name: "Butter", emoji: "🧈", answer: "solid", explain: "Butter is a solid at room temperature (but it melts when heated!)." },
+      { name: "Shampoo", emoji: "🧴", answer: "liquid", explain: "Shampoo is thick but it flows — it's a liquid!" },
+      { name: "Jelly", emoji: "🍮", answer: "solid", explain: "Tricky! Jelly is wobbly but it holds its shape — it's a solid!" },
+      { name: "Toothpaste", emoji: "🪥", answer: "solid", explain: "Tricky! Toothpaste holds its shape until you squeeze it — scientists call it a 'soft solid'!" },
+      { name: "Cloud", emoji: "☁️", answer: "liquid", explain: "Tricky! Clouds are made of tiny droplets of liquid water (and some ice)!" },
+      { name: "Smoke", emoji: "🌑", answer: "gas", explain: "Smoke is a mix of gases and tiny solid particles floating in the air!" },
+      { name: "Glass", emoji: "🪟", answer: "solid", explain: "Glass is definitely a solid — it has a fixed shape!" },
+      { name: "Orange juice", emoji: "🍊", answer: "liquid", explain: "Juice flows and pours — it's a liquid!" },
+      { name: "Helium", emoji: "🎈", answer: "gas", explain: "Helium is the gas that makes balloons float!" },
+      { name: "Chocolate bar", emoji: "🍫", answer: "solid", explain: "Chocolate is solid at room temperature (but melts in your hand!)." },
+    ];
+
+    function SortMode({ onBack, onStars }) {
+      const [items] = useState(() => shuffle(SORT_ITEMS));
+      const [idx, setIdx] = useState(0);
+      const [answered, setAnswered] = useState(null);
+      const [score, setScore] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [feedback, setFeedback] = useState("");
+      const [done, setDone] = useState(false);
+
+      const item = items[idx];
+      const total = items.length;
+
+      function answer(choice) {
+        if (answered) return;
+        setAnswered(choice);
+        if (choice === item.answer) {
+          playSound("correct");
+          setScore(s => s+1);
+          setFeedback(randFrom(ENCOURAGEMENTS));
+          if ((score+1) % 5 === 0) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 100); }
+        } else {
+          playSound("wrong");
+          setFeedback(randFrom(WRONG_MSGS));
+        }
+      }
+
+      function next() {
+        if (idx+1 >= total) {
+          const stars = Math.ceil(score/4);
+          onStars(stars);
+          playSound("levelup");
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 100);
+          setDone(true);
+        } else {
+          setIdx(idx+1);
+          setAnswered(null);
+          setFeedback("");
+        }
+      }
+
+      if (done) {
+        return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+          <Confetti active={showConfetti} />
+          <div style={{maxWidth:500,margin:"0 auto",textAlign:"center",paddingTop:60}}>
+            <div className="bounce-in" style={{fontSize:64,marginBottom:16}}>🏆</div>
+            <h2 style={{fontSize:26,fontWeight:800,marginBottom:12}}>Sorting Complete!</h2>
+            <p style={{fontSize:18,marginBottom:8}}>You got {score} out of {total} correct!</p>
+            <p style={{fontSize:22,marginBottom:24}}>{"⭐".repeat(Math.ceil(score/4))} +{Math.ceil(score/4)} stars</p>
+            <Btn big color="#6366f1" onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+      }
+
+      const stateColors = { solid: "#3b82f6", liquid: "#6366f1", gas: "#f97316" };
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti} />
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Sort It!" />
+
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,opacity:0.8,marginBottom:16}}>
+            <span>Question {idx+1} of {total}</span>
+            <span>Score: {score}/{idx + (answered ? 1 : 0)}</span>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{height:6,background:"rgba(255,255,255,0.1)",borderRadius:3,marginBottom:20}}>
+            <div style={{height:6,background:"#6366f1",borderRadius:3,width:`${(idx/total)*100}%`,transition:"width 0.3s"}} />
+          </div>
+
+          <div className="fade-slide" key={idx} style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:24,textAlign:"center",marginBottom:16}}>
+            <div style={{fontSize:56,marginBottom:12}}>{item.emoji}</div>
+            <h3 style={{fontSize:22,fontWeight:700,marginBottom:8}}>{item.name}</h3>
+            <p style={{fontSize:14,opacity:0.8,marginBottom:20}}>Is this a solid, liquid, or gas?</p>
+
+            <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+              {["solid","liquid","gas"].map(s => {
+                const isCorrect = answered && s === item.answer;
+                const isWrong = answered && s === answered && s !== item.answer;
+                return <button key={s} onClick={() => answer(s)} disabled={!!answered} style={{
+                  padding:"14px 24px",borderRadius:14,border:"2px solid "+(isCorrect?"#22c55e":isWrong?"#ef4444":"transparent"),
+                  background: isCorrect?"#22c55e33":isWrong?"#ef444433":stateColors[s]+"33",
+                  color:"#fff",fontWeight:700,fontSize:15,cursor:answered?"default":"pointer",
+                  opacity:answered&&!isCorrect&&!isWrong?0.4:1,transition:"all 0.2s",minWidth:90
+                }}>
+                  {s==="solid"?"🧊":s==="liquid"?"💧":"♨️"} {s.charAt(0).toUpperCase()+s.slice(1)}
+                </button>;
+              })}
+            </div>
+          </div>
+
+          {answered && <div className="fade-slide" style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:16,marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:16,marginBottom:6,color:answered===item.answer?"#22c55e":"#f59e0b"}}>{feedback}</div>
+            <p style={{fontSize:14,opacity:0.9,lineHeight:1.5}}>{item.explain}</p>
+          </div>}
+
+          {answered && <div style={{textAlign:"center"}}>
+            <Btn big color="#6366f1" onClick={next}>{idx+1>=total?"See Results":"Next →"}</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── HEAT IT UP MODE ────────────────────────────────────────
+    function HeatMode({ onBack }) {
+      const [temp, setTemp] = useState(-20);
+      const [animKey, setAnimKey] = useState(0);
+
+      const state = temp < 0 ? "solid" : temp < 100 ? "liquid" : "gas";
+      const prevState = useRef(state);
+
+      useEffect(() => {
+        if (state !== prevState.current) {
+          playSound("bubble");
+          setAnimKey(k => k+1);
+          prevState.current = state;
+        }
+      }, [state]);
+
+      function heat() {
+        playSound("heat");
+        setTemp(t => Math.min(t+10, 130));
+      }
+      function cool() {
+        playSound("cool");
+        setTemp(t => Math.max(t-10, -30));
+      }
+
+      const processName = () => {
+        if (temp >= -5 && temp < 5) return { text: "MELTING / FREEZING POINT (0°C)", color: "#818cf8" };
+        if (temp >= 95 && temp < 105) return { text: "BOILING POINT (100°C)", color: "#f97316" };
+        if (state === "solid") return { text: "SOLID — particles vibrating in place", color: "#60a5fa" };
+        if (state === "liquid") return { text: "LIQUID — particles flowing around", color: "#818cf8" };
+        return { text: "GAS — particles zooming everywhere!", color: "#fb923c" };
+      };
+
+      const proc = processName();
+
+      const transitions = [
+        { from: "Solid", to: "Liquid", name: "MELTING", emoji: "🧊→💧", desc: "Add heat to melt it! Like ice cream on a hot day.", color: "#6366f1" },
+        { from: "Liquid", to: "Gas", name: "EVAPORATION", emoji: "💧→♨️", desc: "Add more heat! Like puddles disappearing on sunny days.", color: "#f97316" },
+        { from: "Gas", to: "Liquid", name: "CONDENSATION", emoji: "♨️→💧", desc: "Cool it down! Like steam on a cold mirror.", color: "#818cf8" },
+        { from: "Liquid", to: "Solid", name: "FREEZING", emoji: "💧→🧊", desc: "Cool it more! Like water turning to ice in the freezer.", color: "#3b82f6" },
+      ];
+
+      // Thermometer
+      const tempPct = Math.max(0, Math.min(100, ((temp+30)/160)*100));
+      const thermoColor = state==="solid"?"#60a5fa":state==="liquid"?"#818cf8":"#fb923c";
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Heat It Up!" />
+
+          <div style={{display:"flex",gap:16,marginBottom:16,alignItems:"stretch"}}>
+            {/* Thermometer */}
+            <div style={{width:50,background:"rgba(255,255,255,0.08)",borderRadius:14,padding:10,display:"flex",flexDirection:"column",alignItems:"center",position:"relative"}}>
+              <div style={{fontSize:10,fontWeight:700,opacity:0.7,marginBottom:4}}>°C</div>
+              <div style={{flex:1,width:20,background:"rgba(255,255,255,0.1)",borderRadius:10,position:"relative",overflow:"hidden"}}>
+                <div style={{position:"absolute",bottom:0,width:"100%",borderRadius:10,background:`linear-gradient(to top, ${thermoColor}, ${thermoColor}88)`,height:`${tempPct}%`,transition:"height 0.3s"}} />
+              </div>
+              <div style={{fontSize:14,fontWeight:800,marginTop:6,color:thermoColor}}>{temp}°</div>
+            </div>
+
+            {/* Particle display */}
+            <div style={{flex:1,textAlign:"center"}}>
+              <div key={animKey} className="bounce-in">
+                <ParticleBox state={state} width={220} height={160} />
+              </div>
+              <div style={{marginTop:10,fontSize:14,fontWeight:700,color:proc.color}}>{proc.text}</div>
+            </div>
+          </div>
+
+          {/* Heat/Cool buttons */}
+          <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:20}}>
+            <button onClick={cool} style={{padding:"16px 28px",borderRadius:16,border:"none",background:"linear-gradient(135deg, #3b82f6, #2563eb)",color:"#fff",fontWeight:800,fontSize:18,cursor:"pointer",boxShadow:"0 4px 15px rgba(59,130,246,0.4)"}}>
+              ❄️ Cool Down
+            </button>
+            <button onClick={heat} style={{padding:"16px 28px",borderRadius:16,border:"none",background:"linear-gradient(135deg, #f97316, #dc2626)",color:"#fff",fontWeight:800,fontSize:18,cursor:"pointer",boxShadow:"0 4px 15px rgba(249,115,22,0.4)"}}>
+              🔥 Heat Up
+            </button>
+          </div>
+
+          {/* Process diagram */}
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:16}}>
+            <h3 style={{fontSize:15,fontWeight:700,marginBottom:12,textAlign:"center"}}>🔄 The Reversible Changes</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {transitions.map(t => (
+                <div key={t.name} style={{
+                  background:t.color+"22",borderRadius:12,padding:10,
+                  border: (t.name==="MELTING" && temp>=0 && temp<10) || (t.name==="EVAPORATION" && temp>=100 && temp<110) || (t.name==="CONDENSATION" && temp>=90 && temp<100) || (t.name==="FREEZING" && temp>=-10 && temp<0)
+                    ?"2px solid "+t.color:"2px solid transparent",transition:"all 0.3s"
+                }}>
+                  <div style={{fontSize:18,marginBottom:2}}>{t.emoji}</div>
+                  <div style={{fontSize:12,fontWeight:800,color:t.color}}>{t.name}</div>
+                  <div style={{fontSize:10,opacity:0.8,marginTop:2}}>{t.desc}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:12,textAlign:"center",fontSize:12,opacity:0.7}}>
+              These changes can go both ways! Heat melts ice, cold freezes water back again.
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── QUIZ MODE ──────────────────────────────────────────────
+    const QUESTIONS = [
+      { q: "What happens when you heat ice?", options: ["It melts into water","It gets harder","It turns into gas","Nothing happens"], answer: 0 },
+      { q: "What state of matter is steam?", options: ["Solid","Liquid","Gas","Plasma"], answer: 2 },
+      { q: "What is it called when a liquid turns to gas?", options: ["Freezing","Condensation","Melting","Evaporation"], answer: 3 },
+      { q: "Which state has particles packed tightly together?", options: ["Gas","Liquid","Solid","All of them"], answer: 2 },
+      { q: "What happens to chocolate when you heat it?", options: ["It freezes","It melts","It evaporates","It stays the same"], answer: 1 },
+      { q: "Is sand a solid or liquid?", options: ["Liquid because it pours","Solid — each grain is a solid!","Gas because it blows away","None of these"], answer: 1 },
+      { q: "What is condensation?", options: ["Solid turning to liquid","Liquid turning to gas","Gas turning to liquid","Liquid turning to solid"], answer: 2 },
+      { q: "At what temperature does water freeze?", options: ["10°C","50°C","0°C","-10°C"], answer: 2 },
+      { q: "At what temperature does water boil?", options: ["50°C","100°C","200°C","75°C"], answer: 1 },
+      { q: "What state is honey?", options: ["Solid — it's thick","Liquid — it flows, just very slowly!","Gas","It changes all the time"], answer: 1 },
+      { q: "What do we call the change from liquid to solid?", options: ["Melting","Evaporation","Condensation","Freezing"], answer: 3 },
+      { q: "Why does your breath show on cold days?", options: ["It's smoke","The water vapour condenses into tiny droplets","Your breath freezes solid","It's just your imagination"], answer: 1 },
+      { q: "What's inside a balloon that makes it float?", options: ["Oxygen","Water","Helium gas","Nothing"], answer: 2 },
+      { q: "Why do puddles disappear on sunny days?", options: ["Animals drink them","The water evaporates into the air","They sink underground","The wind blows them away"], answer: 1 },
+      { q: "Which of these is a gas?", options: ["Milk","Ice","Wood","Air"], answer: 3 },
+      { q: "In which state do particles move the fastest?", options: ["Solid","Liquid","Gas","They all move the same"], answer: 2 },
+      { q: "What happens when steam touches a cold mirror?", options: ["It evaporates","It condenses into water droplets","It freezes solid","Nothing"], answer: 1 },
+      { q: "Which state takes the shape of its container?", options: ["Solid","Liquid","Gas","Both liquid and gas"], answer: 3 },
+      { q: "What is the correct order of water states from coldest to hottest?", options: ["Gas → Liquid → Solid","Liquid → Solid → Gas","Solid → Liquid → Gas","Solid → Gas → Liquid"], answer: 2 },
+      { q: "Why does a bathroom mirror steam up?", options: ["Someone breathed on it","Hot water vapour condenses on the cool glass","The mirror is melting","It's raining inside"], answer: 1 },
+      { q: "What is water vapour?", options: ["Tiny ice crystals","Liquid water","Water in the gas state","A type of cloud"], answer: 2 },
+      { q: "Can a solid change directly into a gas?", options: ["No, never","Yes! It's called sublimation","Only on Tuesdays","Only in space"], answer: 1 },
+      { q: "What happens when you put water in the freezer?", options: ["It evaporates","It condenses","It freezes into ice","It boils"], answer: 2 },
+      { q: "Why does butter melt on hot toast?", options: ["The bread absorbs it","Heat from the toast melts the solid butter into liquid","The butter evaporates","It doesn't melt"], answer: 1 },
+    ];
+
+    function QuizMode({ onBack, onStars }) {
+      const [questions] = useState(() => shuffle(QUESTIONS).slice(0,12));
+      const [idx, setIdx] = useState(0);
+      const [answered, setAnswered] = useState(null);
+      const [score, setScore] = useState(0);
+      const [streak, setStreak] = useState(0);
+      const [bestStreak, setBestStreak] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [feedback, setFeedback] = useState("");
+      const [done, setDone] = useState(false);
+
+      const q = questions[idx];
+      const total = questions.length;
+
+      function answer(choice) {
+        if (answered !== null) return;
+        setAnswered(choice);
+        if (choice === q.answer) {
+          const newStreak = streak + 1;
+          playSound("correct");
+          setScore(s => s+1);
+          setStreak(newStreak);
+          if (newStreak > bestStreak) setBestStreak(newStreak);
+          setFeedback(randFrom(ENCOURAGEMENTS) + (newStreak >= 3 ? ` ${newStreak} in a row! 🔥` : ""));
+          if (newStreak % 3 === 0) { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 100); }
+        } else {
+          playSound("wrong");
+          setStreak(0);
+          setFeedback(randFrom(WRONG_MSGS));
+        }
+      }
+
+      function next() {
+        if (idx+1 >= total) {
+          const stars = Math.ceil(score/2);
+          onStars(stars);
+          playSound("levelup");
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 100);
+          setDone(true);
+        } else {
+          setIdx(idx+1);
+          setAnswered(null);
+          setFeedback("");
+        }
+      }
+
+      if (done) {
+        return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+          <Confetti active={showConfetti} />
+          <div style={{maxWidth:500,margin:"0 auto",textAlign:"center",paddingTop:60}}>
+            <div className="bounce-in" style={{fontSize:64,marginBottom:16}}>🎯</div>
+            <h2 style={{fontSize:26,fontWeight:800,marginBottom:12}}>Quiz Complete!</h2>
+            <p style={{fontSize:18,marginBottom:4}}>Score: {score} out of {total}</p>
+            <p style={{fontSize:16,marginBottom:4,opacity:0.8}}>Best streak: {bestStreak} 🔥</p>
+            <p style={{fontSize:22,marginBottom:24}}>{"⭐".repeat(Math.ceil(score/2))} +{Math.ceil(score/2)} stars</p>
+            <Btn big color="#6366f1" onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+      }
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti} />
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Quiz Time!" />
+
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,opacity:0.8,marginBottom:8}}>
+            <span>Question {idx+1} of {total}</span>
+            <span>Score: {score} | Streak: {streak} 🔥</span>
+          </div>
+
+          <div style={{height:6,background:"rgba(255,255,255,0.1)",borderRadius:3,marginBottom:20}}>
+            <div style={{height:6,background:"#8b5cf6",borderRadius:3,width:`${((idx)/total)*100}%`,transition:"width 0.3s"}} />
+          </div>
+
+          <div className="fade-slide" key={idx} style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:20,marginBottom:16}}>
+            <h3 style={{fontSize:17,fontWeight:700,marginBottom:18,lineHeight:1.5}}>{q.q}</h3>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {q.options.map((opt, i) => {
+                const isCorrect = answered !== null && i === q.answer;
+                const isWrong = answered !== null && i === answered && i !== q.answer;
+                return <button key={i} onClick={() => answer(i)} disabled={answered!==null} style={{
+                  padding:"12px 16px",borderRadius:12,textAlign:"left",
+                  border:"2px solid "+(isCorrect?"#22c55e":isWrong?"#ef4444":"rgba(255,255,255,0.1)"),
+                  background:isCorrect?"#22c55e22":isWrong?"#ef444422":"rgba(255,255,255,0.05)",
+                  color:"#fff",fontWeight:600,fontSize:14,cursor:answered!==null?"default":"pointer",
+                  opacity:answered!==null&&!isCorrect&&!isWrong?0.4:1,transition:"all 0.2s"
+                }}>{opt}</button>;
+              })}
+            </div>
+          </div>
+
+          {answered !== null && <div className="fade-slide" style={{background:"rgba(255,255,255,0.08)",borderRadius:14,padding:14,marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:15,color:answered===q.answer?"#22c55e":"#f59e0b"}}>{feedback}</div>
+            {answered !== q.answer && <div style={{fontSize:13,opacity:0.9,marginTop:4}}>The correct answer is: <strong>{q.options[q.answer]}</strong></div>}
+          </div>}
+
+          {answered !== null && <div style={{textAlign:"center"}}>
+            <Btn big color="#8b5cf6" onClick={next}>{idx+1>=total?"See Results":"Next →"}</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── REAL WORLD MODE ────────────────────────────────────────
+    const FACTS = [
+      { title: "The Water Cycle 🌧️", emoji: "🌊", color: "#3b82f6",
+        text: "The sun heats water in oceans and puddles (evaporation). The water vapour rises, cools, and turns back into tiny droplets (condensation) forming clouds. When the droplets get heavy enough, they fall as rain (precipitation)! Then it starts all over again." },
+      { title: "Why Does Your Breath Show on Cold Days? 😮", emoji: "❄️", color: "#06b6d4",
+        text: "Your breath contains warm water vapour (gas). When it hits the cold air outside, it quickly cools down and condenses into tiny droplets of liquid water — that's the little cloud you see! It's condensation happening right in front of your eyes!" },
+      { title: "Why Do Ice Lollies Melt? 🍭", emoji: "🍦", color: "#ec4899",
+        text: "Your hand and the air around you are much warmer than the ice lolly. Heat transfers from your hand into the lolly, causing the solid ice to melt into liquid. That's why they melt faster on hot days — more heat!" },
+      { title: "Chocolate Melting in Your Hand 🍫", emoji: "🤲", color: "#92400e",
+        text: "Chocolate melts at about 34°C — that's just below your body temperature (37°C)! That's why it melts in your hand but stays solid in the wrapper. The heat from your body changes it from solid to liquid." },
+      { title: "Steamy Bathroom Mirrors 🪞", emoji: "🚿", color: "#6366f1",
+        text: "When you have a hot shower, the warm water evaporates into steam (gas). When this hot water vapour touches the cold mirror, it condenses back into tiny liquid water droplets. That's why the mirror gets all foggy!" },
+      { title: "What's Inside a Balloon? 🎈", emoji: "🎪", color: "#f59e0b",
+        text: "Balloons are filled with gas! Regular balloons have air (a mix of gases), while floating balloons have helium — a very light gas. The gas particles zoom around inside the balloon, pushing outwards to keep it inflated." },
+      { title: "Disappearing Puddles ☀️", emoji: "🌤️", color: "#f97316",
+        text: "On sunny days, heat from the sun gives energy to water particles in puddles. They move faster and faster until they escape into the air as water vapour — that's evaporation! The puddle slowly disappears into the air." },
+      { title: "Cooking Science 🍳", emoji: "👩‍🍳", color: "#ef4444",
+        text: "Cooking is full of state changes! Boiling water: liquid → gas (steam from the kettle). Melting butter: solid → liquid in the hot pan. The steam rising from your dinner is water evaporating. Even making ice lollies is freezing: liquid → solid!" },
+      { title: "Dry Ice is WILD! 🧊", emoji: "🌬️", color: "#8b5cf6",
+        text: "Dry ice is frozen carbon dioxide (-78°C!). The amazing thing? It doesn't melt into liquid — it goes straight from solid to gas! This is called sublimation. That's why it makes that cool spooky fog effect!" },
+      { title: "Snowflakes are Tiny Crystals ❄️", emoji: "🔬", color: "#06b6d4",
+        text: "When water vapour high in the sky gets very cold, it freezes into beautiful ice crystals — snowflakes! Each one has a unique pattern, but they all have 6 sides. When snow melts in your hand, that's solid turning back to liquid." },
+    ];
+
+    function RealWorldMode({ onBack }) {
+      const [idx, setIdx] = useState(0);
+      const fact = FACTS[idx];
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #1e3a5f 100%)",padding:"16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Real World Science" />
+
+          <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:14}}>
+            Card {idx+1} of {FACTS.length} — Tap arrows to explore!
+          </div>
+
+          <div className="fade-slide" key={idx} style={{background:"rgba(255,255,255,0.08)",borderRadius:20,padding:24,marginBottom:20,border:`2px solid ${fact.color}44`}}>
+            <div style={{textAlign:"center",fontSize:52,marginBottom:12}}>{fact.emoji}</div>
+            <h3 style={{fontSize:19,fontWeight:800,marginBottom:14,textAlign:"center",color:fact.color}}>{fact.title}</h3>
+            <p style={{fontSize:15,lineHeight:1.7,opacity:0.9,textAlign:"center"}}>{fact.text}</p>
+          </div>
+
+          <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+            <Btn color="#475569" onClick={() => {setIdx((idx-1+FACTS.length)%FACTS.length)}} disabled={false}>← Previous</Btn>
+            <Btn color={fact.color} onClick={() => {setIdx((idx+1)%FACTS.length)}}>Next →</Btn>
+          </div>
+
+          {/* Dot indicators */}
+          <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:16}}>
+            {FACTS.map((_, i) => (
+              <div key={i} onClick={() => {playSound("click");setIdx(i)}} style={{
+                width:i===idx?18:8,height:8,borderRadius:4,
+                background:i===idx?FACTS[i].color:"rgba(255,255,255,0.2)",
+                transition:"all 0.3s",cursor:"pointer"
+              }} />
+            ))}
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────
+    function Home({ onNav, totalStars }) {
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0f3460 100%)",padding:"30px 16px",color:"#fff",position:"relative"}}>
+        <a href="index.html" style={{position:"absolute",top:16,left:16,width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}}>🏠</a>
+        <div style={{maxWidth:500,margin:"0 auto",textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:8}} className="float">🔬</div>
+          <h1 style={{fontSize:28,fontWeight:800,marginBottom:4}}>States of Matter!</h1>
+          <p style={{fontSize:14,opacity:0.8,marginBottom:6}}>Solids, Liquids & Gases — Science is cool!</p>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:24}}>⭐ {totalStars} stars</div>
+
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:24}}>
+            {[{e:"🧊",l:"Solid",c:"#3b82f6"},{e:"💧",l:"Liquid",c:"#6366f1"},{e:"♨️",l:"Gas",c:"#f97316"}].map(s => (
+              <div key={s.l} style={{background:s.c+"22",borderRadius:14,padding:"12px 18px",textAlign:"center"}}>
+                <div style={{fontSize:28}}>{s.e}</div>
+                <div style={{fontSize:11,fontWeight:700,opacity:0.8,marginTop:2}}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:10,textAlign:"left"}}>
+            <ModeCard emoji="🧊" title="Learn" desc="Explore the 3 states of matter with animated particles!"
+              color="#3b82f6" onClick={() => onNav("learn")} />
+            <ModeCard emoji="🗂️" title="Sort It!" desc="Sort materials into Solid, Liquid or Gas"
+              color="#10b981" onClick={() => onNav("sort")} />
+            <ModeCard emoji="🔥" title="Heat It Up!" desc="Watch ice melt and water boil — reversible changes!"
+              color="#f97316" onClick={() => onNav("heat")} />
+            <ModeCard emoji="🎯" title="Quiz" desc="Test your knowledge with fun questions!"
+              color="#8b5cf6" onClick={() => onNav("quiz")} />
+            <ModeCard emoji="🌍" title="Real World" desc="Did you know? Fun facts about matter in everyday life!"
+              color="#ec4899" onClick={() => onNav("real")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── APP ────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(getStars);
+
+      function handleStars(n) {
+        const s = addStars(n);
+        setTotalStars(s);
+      }
+
+      if (screen === "learn") return <LearnMode onBack={() => setScreen("home")} />;
+      if (screen === "sort") return <SortMode onBack={() => setScreen("home")} onStars={handleStars} />;
+      if (screen === "heat") return <HeatMode onBack={() => setScreen("home")} />;
+      if (screen === "quiz") return <QuizMode onBack={() => setScreen("home")} onStars={handleStars} />;
+      if (screen === "real") return <RealWorldMode onBack={() => setScreen("home")} />;
+      return <Home onNav={setScreen} totalStars={totalStars} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
