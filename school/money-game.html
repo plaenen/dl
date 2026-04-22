@@ -103,24 +103,30 @@
     };
 
     const SHOP_ITEMS = [
-      { name: "Ice cream", emoji: "🍦", priceGBP: 2 },
-      { name: "Book", emoji: "📚", priceGBP: 5 },
-      { name: "Toy car", emoji: "🚗", priceGBP: 3 },
+      { name: "Unicorn plushie", emoji: "🦄", priceGBP: 8 },
+      { name: "Glitter nail polish", emoji: "💅", priceGBP: 3 },
+      { name: "Fairy wings", emoji: "🧚", priceGBP: 6 },
+      { name: "Hair ribbons", emoji: "🎀", priceGBP: 2 },
+      { name: "Friendship bracelet", emoji: "📿", priceGBP: 4 },
+      { name: "Sparkly diary", emoji: "💖", priceGBP: 5 },
+      { name: "Butterfly stickers", emoji: "🦋", priceGBP: 1 },
+      { name: "Princess crown", emoji: "👑", priceGBP: 7 },
+      { name: "Rainbow pen set", emoji: "🌈", priceGBP: 3 },
+      { name: "Cupcake kit", emoji: "🧁", priceGBP: 9 },
+      { name: "Flower seeds", emoji: "🌸", priceGBP: 2 },
+      { name: "Cute cat bag", emoji: "🐱", priceGBP: 12 },
+      { name: "Lip balm set", emoji: "💋", priceGBP: 4 },
+      { name: "Mermaid tail blanket", emoji: "🧜‍♀️", priceGBP: 15 },
+      { name: "Star earrings", emoji: "✨", priceGBP: 6 },
+      { name: "Fluffy slippers", emoji: "🩰", priceGBP: 10 },
+      { name: "Ice cream sundae", emoji: "🍨", priceGBP: 3 },
       { name: "Teddy bear", emoji: "🧸", priceGBP: 8 },
-      { name: "Chocolate bar", emoji: "🍫", priceGBP: 1 },
-      { name: "Football", emoji: "⚽", priceGBP: 10 },
-      { name: "Puzzle", emoji: "🧩", priceGBP: 4 },
-      { name: "Water bottle", emoji: "🧴", priceGBP: 3 },
-      { name: "Crayons", emoji: "🖍️", priceGBP: 2 },
-      { name: "Lunchbox", emoji: "🍱", priceGBP: 6 },
-      { name: "Sunglasses", emoji: "🕶️", priceGBP: 7 },
-      { name: "Hat", emoji: "🧢", priceGBP: 4 },
-      { name: "Stickers", emoji: "⭐", priceGBP: 1 },
-      { name: "Juice box", emoji: "🧃", priceGBP: 1 },
-      { name: "Backpack", emoji: "🎒", priceGBP: 15 },
-      { name: "Trainers", emoji: "👟", priceGBP: 20 },
-      { name: "Watch", emoji: "⌚", priceGBP: 12 },
-      { name: "Headphones", emoji: "🎧", priceGBP: 9 },
+      { name: "Charm necklace", emoji: "💎", priceGBP: 5 },
+      { name: "Bunny keyring", emoji: "🐰", priceGBP: 2 },
+      { name: "Strawberry lip gloss", emoji: "🍓", priceGBP: 1 },
+      { name: "Dance shoes", emoji: "👠", priceGBP: 20 },
+      { name: "Art set", emoji: "🎨", priceGBP: 7 },
+      { name: "Sunflower headband", emoji: "🌻", priceGBP: 4 },
     ];
 
     const ENCOURAGEMENTS = ["Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨","Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Perfect! 🎯","On fire! 🔥","Legend! 🏆"];
@@ -142,7 +148,7 @@
       } catch(e){}
     }
 
-    function Confetti({active}){const[p,setP]=useState([]);useEffect(()=>{if(!active)return;setP(Array.from({length:25},(_,i)=>({id:Date.now()+i,left:Math.random()*100,delay:Math.random()*0.5,emoji:randFrom(["💰","🪙","💵","💷","🌟","✨","🎉","💎"])})));const t=setTimeout(()=>setP([]),3500);return()=>clearTimeout(t)},[active]);return<>{p.map(c=><div key={c.id} className="confetti-piece" style={{left:`${c.left}%`,animationDelay:`${c.delay}s`}}>{c.emoji}</div>)}</>}
+    function Confetti({active}){const[p,setP]=useState([]);useEffect(()=>{if(!active)return;setP(Array.from({length:25},(_,i)=>({id:Date.now()+i,left:Math.random()*100,delay:Math.random()*0.5,emoji:randFrom(["💖","✨","🦄","🎀","💎","🌸","🦋","👑","💅","🌈"])})));const t=setTimeout(()=>setP([]),3500);return()=>clearTimeout(t)},[active]);return<>{p.map(c=><div key={c.id} className="confetti-piece" style={{left:`${c.left}%`,animationDelay:`${c.delay}s`}}>{c.emoji}</div>)}</>}
 
     function Btn({children,onClick,color="#3b82f6",big,disabled,active,style:s}){
       return<button onClick={()=>{if(!disabled){playSound("click");onClick?.()}}} disabled={disabled} style={{
@@ -192,8 +198,8 @@
               color="#3b82f6" onClick={() => onNav("change")} />
             <ModeCard emoji="🔄" title="Currency Converter" desc="Converting money IS multiplication! £1 = 5 AED = HK$10"
               color="#f59e0b" onClick={() => onNav("convert")} />
-            <ModeCard emoji="🌍" title="World Shop" desc="Buy items in one country, pay in another currency!"
-              color="#8b5cf6" onClick={() => onNav("worldshop")} />
+            <ModeCard emoji="👑" title="World Shop ✨" desc="Shop for cute things and pay in different currencies!"
+              color="#ec4899" onClick={() => onNav("worldshop")} />
           </div>
         </div>
       </div>;
@@ -714,10 +720,10 @@
       const priceC = CURRENCIES[q.priceCur];
       const payC = CURRENCIES[q.payCur];
 
-      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)",padding:"20px 16px",color:"#fff"}}>
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #831843 0%, #be185d 50%, #f472b6 100%)",padding:"20px 16px",color:"#fff"}}>
         <Confetti active={confetti} />
         <div style={{maxWidth:500,margin:"0 auto"}}>
-          <BackBar onBack={onBack} title="World Shop" />
+          <BackBar onBack={onBack} title="✨ World Shop ✨" />
           <div style={{textAlign:"center",fontSize:13,opacity:0.7,marginBottom:8}}>{score.c}/{score.t} correct</div>
 
           <div className={feedback?(feedback.correct?"bounce-in":"shake"):""} style={{
@@ -771,7 +777,7 @@
                   : `${q.price} × ${q.rate} = ${q.answer}`
                 }
               </div>
-              <div style={{marginTop:12}}><Btn onClick={generate} color="#8b5cf6" big>Next →</Btn></div>
+              <div style={{marginTop:12}}><Btn onClick={generate} color="#ec4899" big>Next →</Btn></div>
             </div>}
           </div>
 
