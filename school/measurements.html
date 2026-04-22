@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Measurement Master!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Perfect! 🎯",
+      "On fire! 🔥","Legend! 🏆","Unstoppable! ⚡","Wow! 🚀",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+    function randInt(min,max) { return Math.floor(Math.random()*(max-min+1))+min; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if(type==="correct"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.1);osc.frequency.setValueAtTime(784,ctx.currentTime+0.2);gain.gain.setValueAtTime(0,ctx.currentTime+0.35);osc.stop(ctx.currentTime+0.35)}
+        else if(type==="wrong"){osc.frequency.value=200;osc.type="sawtooth";osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.3);osc.stop(ctx.currentTime+0.3)}
+        else if(type==="levelup"){osc.frequency.value=523;osc.start();osc.frequency.setValueAtTime(659,ctx.currentTime+0.15);osc.frequency.setValueAtTime(784,ctx.currentTime+0.3);osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45);gain.gain.setValueAtTime(0,ctx.currentTime+0.7);osc.stop(ctx.currentTime+0.7)}
+        else if(type==="click"){osc.frequency.value=800;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.06);osc.stop(ctx.currentTime+0.06)}
+        else if(type==="tick"){osc.frequency.value=1000;osc.start();gain.gain.setValueAtTime(0,ctx.currentTime+0.03);osc.stop(ctx.currentTime+0.03)}
+      } catch(e){}
+    }
+
+    function Confetti({active}){
+      const[p,setP]=useState([]);
+      useEffect(()=>{
+        if(!active)return;
+        setP(Array.from({length:25},(_,i)=>({id:Date.now()+i,left:Math.random()*100,delay:Math.random()*0.5,emoji:randFrom(["🌟","⭐","🎉","✨","📏","⚖️","🥤","🎊"])})));
+        const t=setTimeout(()=>setP([]),3500);
+        return()=>clearTimeout(t);
+      },[active]);
+      return<>{p.map(c=><div key={c.id} className="confetti-piece" style={{left:`${c.left}%`,animationDelay:`${c.delay}s`}}>{c.emoji}</div>)}</>;
+    }
+
+    function Btn({children,onClick,color="#10b981",big,disabled,active,style:s}){
+      return<button onClick={()=>{if(!disabled){playSound("click");onClick?.()}}} disabled={disabled} style={{
+        padding:big?"16px 32px":"10px 20px",borderRadius:14,
+        border:active?"3px solid #fff":"3px solid transparent",
+        background:disabled?"#cbd5e1":color,color:"#fff",fontWeight:700,
+        fontSize:big?18:14,cursor:disabled?"default":"pointer",
+        boxShadow:disabled?"none":`0 4px 14px ${color}44`,transition:"all 0.2s",...s
+      }}>{children}</button>;
+    }
+
+    function BackBar({onBack,title}){
+      return<div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",marginBottom:12}}>
+        <button onClick={()=>{playSound("click");onBack()}} style={{
+          width:36,height:36,borderRadius:10,border:"none",background:"rgba(255,255,255,0.15)",
+          color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+        }}>{"←"}</button>
+        <span style={{fontWeight:700,fontSize:18,color:"#fff"}}>{title}</span>
+      </div>;
+    }
+
+    function ModeCard({emoji,title,desc,color,onClick}){
+      return<button onClick={()=>{playSound("click");onClick()}} style={{
+        display:"flex",alignItems:"center",gap:14,padding:"16px 18px",borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",
+        color:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.2s",width:"100%",
+      }}>
+        <div style={{width:50,height:50,borderRadius:14,background:color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{emoji}</div>
+        <div><div style={{fontWeight:700,fontSize:16,marginBottom:2}}>{title}</div><div style={{fontSize:12,opacity:0.7}}>{desc}</div></div>
+      </button>;
+    }
+
+    function Card({children,style:s}){
+      return<div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:20,border:"1px solid rgba(255,255,255,0.1)",...s}}>{children}</div>;
+    }
+
+    // ─── ESTIMATE QUESTIONS ──────────────────────────────────────────
+    const ESTIMATE_QS = [
+      {q:"How tall is a door?",emoji:"🚪",options:["2m","20m","200m"],correct:0},
+      {q:"How heavy is an apple?",emoji:"🍎",options:["15g","150g","1500g"],correct:1},
+      {q:"How much water in a bathtub?",emoji:"🛁",options:["3ml","30l","300l"],correct:2},
+      {q:"How long is a pencil?",emoji:"✏️",options:["18mm","18cm","18m"],correct:1},
+      {q:"How heavy is a cat?",emoji:"🐱",options:["40g","400g","4kg"],correct:2},
+      {q:"Width of a football pitch?",emoji:"⚽",options:["7m","70m","700m"],correct:1},
+      {q:"How tall is a Year 4 girl?",emoji:"👧",options:["13cm","130cm","13m"],correct:1},
+      {q:"How heavy is a bag of flour?",emoji:"🍞",options:["15g","150g","1.5kg"],correct:2},
+      {q:"How much water in a glass?",emoji:"🥛",options:["25ml","250ml","25l"],correct:1},
+      {q:"How long is a car?",emoji:"🚗",options:["40cm","4m","40m"],correct:1},
+      {q:"How heavy is a newborn baby?",emoji:"👶",options:["350g","3.5kg","35kg"],correct:1},
+      {q:"How far is a marathon?",emoji:"🏃‍♀️",options:["4km","42km","420km"],correct:1},
+      {q:"How much does a watermelon weigh?",emoji:"🍉",options:["50g","500g","5kg"],correct:2},
+      {q:"How long is your thumb?",emoji:"👍",options:["5mm","5cm","50cm"],correct:1},
+      {q:"How much milk in a cereal bowl?",emoji:"🥣",options:["20ml","200ml","2l"],correct:1},
+      {q:"How tall is a double-decker bus?",emoji:"🚌",options:["44cm","4.4m","44m"],correct:1},
+      {q:"How heavy is a slice of bread?",emoji:"🍞",options:["3g","30g","300g"],correct:1},
+      {q:"How much juice in a carton?",emoji:"🧃",options:["20ml","200ml","20l"],correct:1},
+      {q:"How long is a swimming pool?",emoji:"🏊‍♀️",options:["2.5m","25m","250m"],correct:1},
+      {q:"How heavy is a chicken egg?",emoji:"🥚",options:["6g","60g","600g"],correct:1},
+      {q:"How wide is a mobile phone?",emoji:"📱",options:["7mm","7cm","70cm"],correct:1},
+      {q:"How much does a bicycle weigh?",emoji:"🚲",options:["1.2kg","12kg","120kg"],correct:1},
+      {q:"How much water in a kitchen sink?",emoji:"🚰",options:["800ml","8l","80l"],correct:1},
+      {q:"How far from London to Edinburgh?",emoji:"🗺️",options:["66km","660km","6600km"],correct:1},
+    ];
+
+    // ─── WORD PROBLEMS ──────────────────────────────────────────────
+    const WORD_PROBLEMS = [
+      {q:"A ribbon is 3m long. You cut off 150cm. How many cm is left?",answer:150,unit:"cm",steps:["3m = 300cm","300cm − 150cm = 150cm"]},
+      {q:"You buy 2kg of apples and 500g of grapes. How many grams total?",answer:2500,unit:"g",steps:["2kg = 2000g","2000g + 500g = 2500g"]},
+      {q:"A bottle holds 1.5 litres. How many ml is that?",answer:1500,unit:"ml",steps:["1 litre = 1000ml","1.5 × 1000 = 1500ml"]},
+      {q:"You walk 800m to school and 800m back. How many km total?",answer:1.6,unit:"km",steps:["800m + 800m = 1600m","1600m ÷ 1000 = 1.6km"]},
+      {q:"A pencil is 18cm long. You sharpen it and lose 15mm. How many mm is it now?",answer:165,unit:"mm",steps:["18cm = 180mm","180mm − 15mm = 165mm"]},
+      {q:"You have 3 bags of sugar, each 1kg. How many grams in total?",answer:3000,unit:"g",steps:["1kg = 1000g","3 × 1000g = 3000g"]},
+      {q:"A fish tank holds 25 litres. You fill 3 buckets of 4 litres each. How many litres are left to fill?",answer:13,unit:"l",steps:["3 × 4l = 12l","25l − 12l = 13l"]},
+      {q:"A rope is 5m 40cm long. How many cm is that?",answer:540,unit:"cm",steps:["5m = 500cm","500cm + 40cm = 540cm"]},
+      {q:"You pour 750ml of juice into a 1 litre jug. How many ml can you still add?",answer:250,unit:"ml",steps:["1 litre = 1000ml","1000ml − 750ml = 250ml"]},
+      {q:"A parcel weighs 2kg 300g. How many grams is that?",answer:2300,unit:"g",steps:["2kg = 2000g","2000g + 300g = 2300g"]},
+      {q:"You run 400m around a track 5 times. How many km is that?",answer:2,unit:"km",steps:["400m × 5 = 2000m","2000m ÷ 1000 = 2km"]},
+      {q:"A recipe needs 250ml of milk. You make it 4 times. How many litres of milk total?",answer:1,unit:"l",steps:["250ml × 4 = 1000ml","1000ml ÷ 1000 = 1l"]},
+      {q:"Your book is 2cm thick. You stack 15 books. How many mm tall is the stack?",answer:300,unit:"mm",steps:["2cm = 20mm","20mm × 15 = 300mm"]},
+      {q:"A bag of potatoes weighs 2.5kg. You use 800g. How many grams are left?",answer:1700,unit:"g",steps:["2.5kg = 2500g","2500g − 800g = 1700g"]},
+      {q:"You cycle 3km to the park and 3km back, 5 days a week. How many km per week?",answer:30,unit:"km",steps:["3km + 3km = 6km per day","6km × 5 = 30km"]},
+      {q:"A jug holds 2 litres. You pour out 600ml. How many ml is left?",answer:1400,unit:"ml",steps:["2 litres = 2000ml","2000ml − 600ml = 1400ml"]},
+      {q:"A garden path is 12m long and 50cm wide. How many cm long is it?",answer:1200,unit:"cm",steps:["12m × 100 = 1200cm"]},
+      {q:"You have 4 parcels. Each weighs 750g. How many kg altogether?",answer:3,unit:"kg",steps:["750g × 4 = 3000g","3000g ÷ 1000 = 3kg"]},
+    ];
+
+    // ─── CONVERSION GENERATORS ──────────────────────────────────────
+    const CONVERSIONS = [
+      // Length easy
+      {from:"mm",to:"cm",factor:10,dir:"div",cat:"Length"},
+      {from:"cm",to:"mm",factor:10,dir:"mul",cat:"Length"},
+      // Length medium
+      {from:"cm",to:"m",factor:100,dir:"div",cat:"Length"},
+      {from:"m",to:"cm",factor:100,dir:"mul",cat:"Length"},
+      // Length hard
+      {from:"m",to:"km",factor:1000,dir:"div",cat:"Length"},
+      {from:"km",to:"m",factor:1000,dir:"mul",cat:"Length"},
+      // Weight
+      {from:"g",to:"kg",factor:1000,dir:"div",cat:"Weight"},
+      {from:"kg",to:"g",factor:1000,dir:"mul",cat:"Weight"},
+      // Capacity
+      {from:"ml",to:"l",factor:1000,dir:"div",cat:"Capacity"},
+      {from:"l",to:"ml",factor:1000,dir:"mul",cat:"Capacity"},
+    ];
+
+    function genConversion(difficulty) {
+      let pool;
+      if(difficulty<4) pool = CONVERSIONS.filter(c=>c.factor<=10);
+      else if(difficulty<8) pool = CONVERSIONS.filter(c=>c.factor<=100);
+      else pool = CONVERSIONS;
+      const conv = randFrom(pool);
+      let value, answer;
+      if(conv.dir==="mul"){
+        value = conv.factor<=10 ? randInt(1,20) : conv.factor<=100 ? randInt(1,15) : randInt(1,10);
+        answer = value * conv.factor;
+      } else {
+        const base = conv.factor<=10 ? randInt(1,20)*conv.factor : conv.factor<=100 ? randInt(1,15)*conv.factor : randInt(1,10)*conv.factor;
+        value = base;
+        answer = base / conv.factor;
+      }
+      const hint = conv.dir==="mul" ? `× ${conv.factor}` : `÷ ${conv.factor}`;
+      return {value, from:conv.from, to:conv.to, answer, hint, cat:conv.cat};
+    }
+
+    function genSpeedQ() {
+      const conv = randFrom(CONVERSIONS);
+      let value, answer;
+      if(conv.dir==="mul"){
+        value = conv.factor<=10 ? randInt(1,20) : conv.factor<=100 ? randInt(1,10) : randInt(1,8);
+        answer = value * conv.factor;
+      } else {
+        const base = conv.factor<=10 ? randInt(1,20)*conv.factor : conv.factor<=100 ? randInt(1,10)*conv.factor : randInt(1,8)*conv.factor;
+        value = base;
+        answer = base / conv.factor;
+      }
+      return {value, from:conv.from, to:conv.to, answer};
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    function Home({onNav, totalStars}) {
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"30px 16px",color:"#fff",position:"relative"}}>
+        <a href="index.html" style={{position:"absolute",top:16,left:16,width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}}>🏠</a>
+        <div style={{maxWidth:500,margin:"0 auto",textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:8}} className="float">📏</div>
+          <h1 style={{fontSize:30,fontWeight:800,marginBottom:4}}>Measurement Master!</h1>
+          <p style={{fontSize:14,opacity:0.8,marginBottom:6}}>Length, weight & capacity — convert like a pro!</p>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:24}}>⭐ {totalStars} stars</div>
+
+          <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:24}}>
+            {[{e:"📐",l:"Length"},{e:"⚖️",l:"Weight"},{e:"🥤",l:"Capacity"}].map(x=>
+              <div key={x.l} style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 16px",textAlign:"center"}}>
+                <div style={{fontSize:28}}>{x.e}</div>
+                <div style={{fontSize:11,fontWeight:600,opacity:0.7}}>{x.l}</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:10,textAlign:"left"}}>
+            <ModeCard emoji="📏" title="Learn" desc="Visual guide to metric units with relatable examples" color="#059669" onClick={()=>onNav("learn")} />
+            <ModeCard emoji="🔄" title="Convert It!" desc="Practice converting between metric units" color="#0d9488" onClick={()=>onNav("convert")} />
+            <ModeCard emoji="🤔" title="Estimate It!" desc="Guess the measurement of everyday objects" color="#0891b2" onClick={()=>onNav("estimate")} />
+            <ModeCard emoji="⚡" title="Speed Challenge" desc="60-second timed conversion challenge!" color="#f59e0b" onClick={()=>onNav("speed")} />
+            <ModeCard emoji="📝" title="Word Problems" desc="Real-world measurement puzzles to solve" color="#8b5cf6" onClick={()=>onNav("word")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── LEARN ──────────────────────────────────────────────────────
+    function Learn({onBack}) {
+      const [tab,setTab] = useState("length");
+      const tabs = [
+        {id:"length",label:"📐 Length",color:"#059669"},
+        {id:"weight",label:"⚖️ Weight",color:"#0d9488"},
+        {id:"capacity",label:"🥤 Capacity",color:"#0891b2"},
+      ];
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"16px",color:"#fff"}}>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Learn 📏" />
+          <div style={{display:"flex",gap:6,marginBottom:16}}>
+            {tabs.map(t=><button key={t.id} onClick={()=>{playSound("click");setTab(t.id)}} style={{
+              flex:1,padding:"8px 4px",borderRadius:10,border:"none",
+              background:tab===t.id?t.color:"rgba(255,255,255,0.1)",color:"#fff",
+              fontWeight:700,fontSize:13,cursor:"pointer",transition:"all 0.2s"
+            }}>{t.label}</button>)}
+          </div>
+
+          {tab==="length" && <div className="fade-slide">
+            <Card style={{marginBottom:12}}>
+              <h3 style={{marginBottom:12,fontSize:18}}>📐 Length — How long is it?</h3>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>💅</span>
+                  <div><b>1 cm</b> — about the width of your fingernail</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>🦶</span>
+                  <div><b>1 m</b> — one big step (or a guitar!)</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>🚶‍♀️</span>
+                  <div><b>1 km</b> — about a 10-minute walk</div>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <h3 style={{marginBottom:12,fontSize:16}}>🔗 The Conversion Chain</h3>
+              <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:16,textAlign:"center",fontSize:16,lineHeight:2}}>
+                <span style={{fontWeight:700}}>mm</span>
+                <span style={{color:"#6ee7b7"}}> ×10→ </span>
+                <span style={{fontWeight:700}}>cm</span>
+                <span style={{color:"#6ee7b7"}}> ×100→ </span>
+                <span style={{fontWeight:700}}>m</span>
+                <span style={{color:"#6ee7b7"}}> ×1000→ </span>
+                <span style={{fontWeight:700}}>km</span>
+              </div>
+              <p style={{marginTop:10,fontSize:13,opacity:0.8}}>To go the other way, just divide! km ÷1000→ m ÷100→ cm ÷10→ mm</p>
+            </Card>
+          </div>}
+
+          {tab==="weight" && <div className="fade-slide">
+            <Card style={{marginBottom:12}}>
+              <h3 style={{marginBottom:12,fontSize:18}}>⚖️ Weight — How heavy is it?</h3>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>📎</span>
+                  <div><b>1 g</b> — a paperclip</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>🍬</span>
+                  <div><b>1 kg</b> — a bag of sugar</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>🚗</span>
+                  <div><b>1 tonne</b> — a small car (= 1000 kg!)</div>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <h3 style={{marginBottom:12,fontSize:16}}>🔗 The Conversion</h3>
+              <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:16,textAlign:"center",fontSize:18,lineHeight:2}}>
+                <span style={{fontWeight:700}}>g</span>
+                <span style={{color:"#6ee7b7"}}> ×1000→ </span>
+                <span style={{fontWeight:700}}>kg</span>
+                <span style={{color:"#6ee7b7"}}> ×1000→ </span>
+                <span style={{fontWeight:700}}>tonne</span>
+              </div>
+              <p style={{marginTop:10,fontSize:13,opacity:0.8}}>1000 grams = 1 kilogram. 1000 kilograms = 1 tonne.</p>
+            </Card>
+          </div>}
+
+          {tab==="capacity" && <div className="fade-slide">
+            <Card style={{marginBottom:12}}>
+              <h3 style={{marginBottom:12,fontSize:18}}>🥤 Capacity — How much liquid?</h3>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>💧</span>
+                  <div><b>1 ml</b> — about one drop of water</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:32}}>🧴</span>
+                  <div><b>1 l</b> — a water bottle</div>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <h3 style={{marginBottom:12,fontSize:16}}>🔗 The Conversion</h3>
+              <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:16,textAlign:"center",fontSize:18,lineHeight:2}}>
+                <span style={{fontWeight:700}}>ml</span>
+                <span style={{color:"#6ee7b7"}}> ×1000→ </span>
+                <span style={{fontWeight:700}}>l</span>
+              </div>
+              <p style={{marginTop:10,fontSize:13,opacity:0.8}}>1000 millilitres = 1 litre. That's it!</p>
+              <p style={{marginTop:6,fontSize:13,opacity:0.8}}>💡 It's just multiplication and division — like money and time!</p>
+            </Card>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── CONVERT IT! ────────────────────────────────────────────────
+    function ConvertIt({onBack, addStars}) {
+      const [q,setQ] = useState(()=>genConversion(0));
+      const [input,setInput] = useState("");
+      const [feedback,setFeedback] = useState(null);
+      const [streak,setStreak] = useState(0);
+      const [score,setScore] = useState(0);
+      const [difficulty,setDifficulty] = useState(0);
+      const [showConfetti,setShowConfetti] = useState(false);
+      const inputRef = useRef(null);
+
+      function next() {
+        const d = difficulty + (feedback==="correct"?1:0);
+        setDifficulty(d);
+        setQ(genConversion(d));
+        setInput("");
+        setFeedback(null);
+        setTimeout(()=>inputRef.current?.focus(),100);
+      }
+
+      function check() {
+        const val = parseFloat(input);
+        if(isNaN(val)) return;
+        if(val===q.answer) {
+          playSound("correct");
+          setFeedback("correct");
+          const newStreak = streak+1;
+          setStreak(newStreak);
+          const stars = newStreak%5===0?3:1;
+          setScore(s=>s+stars);
+          addStars(stars);
+          if(newStreak%5===0){setShowConfetti(true);playSound("levelup");setTimeout(()=>setShowConfetti(false),100);}
+        } else {
+          playSound("wrong");
+          setFeedback("wrong");
+          setStreak(0);
+        }
+      }
+
+      function handleKey(e){if(e.key==="Enter")check();}
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti}/>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Convert It! 🔄" />
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+            <span>🔥 Streak: {streak}</span>
+            <span>⭐ {score}</span>
+          </div>
+          <Card style={{textAlign:"center",marginBottom:16}} className="fade-slide">
+            <div style={{fontSize:13,opacity:0.7,marginBottom:8}}>{q.cat}</div>
+            <div style={{fontSize:28,fontWeight:800,marginBottom:8}}>{q.value} {q.from}</div>
+            <div style={{fontSize:16,marginBottom:4}}>= ? {q.to}</div>
+            <div style={{fontSize:13,color:"#6ee7b7",marginBottom:16}}>Hint: {q.hint}</div>
+            <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+              <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+                style={{width:120,padding:"10px 14px",borderRadius:10,border:"2px solid rgba(255,255,255,0.2)",
+                background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:20,textAlign:"center",outline:"none"}}
+                placeholder="?" autoFocus />
+              <span style={{fontSize:16,fontWeight:700}}>{q.to}</span>
+            </div>
+          </Card>
+
+          {!feedback && <div style={{textAlign:"center"}}><Btn onClick={check} big color="#0d9488">Check ✓</Btn></div>}
+
+          {feedback==="correct" && <div className="bounce-in" style={{textAlign:"center"}}>
+            <Card style={{background:"rgba(16,185,129,0.2)",marginBottom:12}}>
+              <div style={{fontSize:24,fontWeight:800}}>{randFrom(ENCOURAGEMENTS)}</div>
+              <div style={{fontSize:16,marginTop:4}}>{q.value} {q.from} = {q.answer} {q.to}</div>
+            </Card>
+            <Btn onClick={next} big color="#059669">Next →</Btn>
+          </div>}
+
+          {feedback==="wrong" && <div className="shake" style={{textAlign:"center"}}>
+            <Card style={{background:"rgba(239,68,68,0.2)",marginBottom:12}}>
+              <div style={{fontSize:18,fontWeight:700}}>{randFrom(WRONG_MSGS)}</div>
+              <div style={{fontSize:14,marginTop:4,opacity:0.8}}>The answer is {q.answer} {q.to}</div>
+              <div style={{fontSize:13,marginTop:4,color:"#6ee7b7"}}>{q.value} {q.hint} = {q.answer}</div>
+            </Card>
+            <Btn onClick={next} big color="#059669">Next →</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── ESTIMATE IT! ───────────────────────────────────────────────
+    function EstimateIt({onBack, addStars}) {
+      const [questions] = useState(()=>shuffle(ESTIMATE_QS));
+      const [idx,setIdx] = useState(0);
+      const [chosen,setChosen] = useState(null);
+      const [score,setScore] = useState(0);
+      const [showConfetti,setShowConfetti] = useState(false);
+
+      const current = questions[idx % questions.length];
+      const isCorrect = chosen === current.correct;
+
+      function choose(i) {
+        if(chosen!==null) return;
+        setChosen(i);
+        if(i===current.correct){
+          playSound("correct");
+          setScore(s=>s+1);
+          addStars(1);
+          if((score+1)%5===0){setShowConfetti(true);playSound("levelup");setTimeout(()=>setShowConfetti(false),100);}
+        } else {
+          playSound("wrong");
+        }
+      }
+
+      function next(){setChosen(null);setIdx(i=>i+1);}
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti}/>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Estimate It! 🤔" />
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+            <span>Question {(idx%questions.length)+1}/{questions.length}</span>
+            <span>⭐ {score}</span>
+          </div>
+          <Card style={{textAlign:"center",marginBottom:16}} className="fade-slide">
+            <div style={{fontSize:48,marginBottom:8}}>{current.emoji}</div>
+            <div style={{fontSize:18,fontWeight:700,marginBottom:16}}>{current.q}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {current.options.map((opt,i)=>{
+                let bg = "rgba(255,255,255,0.1)";
+                let border = "2px solid rgba(255,255,255,0.15)";
+                if(chosen!==null){
+                  if(i===current.correct){bg="rgba(16,185,129,0.3)";border="2px solid #10b981";}
+                  else if(i===chosen){bg="rgba(239,68,68,0.3)";border="2px solid #ef4444";}
+                }
+                return<button key={i} onClick={()=>choose(i)} style={{
+                  padding:"12px 16px",borderRadius:12,border,background:bg,
+                  color:"#fff",fontSize:18,fontWeight:700,cursor:chosen!==null?"default":"pointer",
+                  transition:"all 0.2s",
+                }}>{opt}</button>;
+              })}
+            </div>
+          </Card>
+          {chosen!==null && <div className={isCorrect?"bounce-in":"shake"} style={{textAlign:"center"}}>
+            <div style={{fontSize:18,fontWeight:700,marginBottom:12}}>
+              {isCorrect ? randFrom(ENCOURAGEMENTS) : `The answer is ${current.options[current.correct]}`}
+            </div>
+            <Btn onClick={next} big color="#059669">Next →</Btn>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── SPEED CHALLENGE ────────────────────────────────────────────
+    function SpeedChallenge({onBack, addStars}) {
+      const [state,setState] = useState("ready"); // ready, playing, done
+      const [q,setQ] = useState(()=>genSpeedQ());
+      const [input,setInput] = useState("");
+      const [score,setScore] = useState(0);
+      const [timeLeft,setTimeLeft] = useState(60);
+      const [showConfetti,setShowConfetti] = useState(false);
+      const timerRef = useRef(null);
+      const inputRef = useRef(null);
+
+      function start() {
+        setState("playing");
+        setScore(0);
+        setTimeLeft(60);
+        setQ(genSpeedQ());
+        setInput("");
+        timerRef.current = setInterval(()=>{
+          setTimeLeft(t=>{
+            if(t<=1){clearInterval(timerRef.current);setState("done");return 0;}
+            if(t<=6) playSound("tick");
+            return t-1;
+          });
+        },1000);
+        setTimeout(()=>inputRef.current?.focus(),100);
+      }
+
+      useEffect(()=>{
+        if(state==="done"){
+          const stars = score>=15?5:score>=10?3:score>=5?2:1;
+          addStars(stars);
+          if(score>=10){setShowConfetti(true);playSound("levelup");setTimeout(()=>setShowConfetti(false),100);}
+        }
+        return()=>clearInterval(timerRef.current);
+      },[state]);
+
+      function check(){
+        const val=parseFloat(input);
+        if(isNaN(val))return;
+        if(val===q.answer){
+          playSound("correct");
+          setScore(s=>s+1);
+        } else {
+          playSound("wrong");
+        }
+        setQ(genSpeedQ());
+        setInput("");
+        setTimeout(()=>inputRef.current?.focus(),50);
+      }
+
+      function handleKey(e){if(e.key==="Enter")check();}
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti}/>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={()=>{clearInterval(timerRef.current);onBack();}} title="Speed Challenge ⚡" />
+
+          {state==="ready" && <div style={{textAlign:"center"}} className="fade-slide">
+            <div style={{fontSize:64,marginBottom:16}}>⚡</div>
+            <h2 style={{fontSize:22,marginBottom:8}}>60-Second Challenge!</h2>
+            <p style={{opacity:0.8,marginBottom:24}}>Convert as many measurements as you can in 60 seconds!</p>
+            <Btn onClick={start} big color="#f59e0b">Start! 🏁</Btn>
+          </div>}
+
+          {state==="playing" && <div className="fade-slide">
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,fontSize:18,fontWeight:700}}>
+              <span style={{color:timeLeft<=10?"#fca5a5":"#fff"}}>⏱️ {timeLeft}s</span>
+              <span>✅ {score}</span>
+            </div>
+            <Card style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:28,fontWeight:800,marginBottom:12}}>{q.value} {q.from} = ? {q.to}</div>
+              <div style={{display:"flex",gap:8,justifyContent:"center",alignItems:"center"}}>
+                <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+                  style={{width:120,padding:"10px 14px",borderRadius:10,border:"2px solid rgba(255,255,255,0.2)",
+                  background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:20,textAlign:"center",outline:"none"}}
+                  placeholder="?" autoFocus />
+                <span style={{fontWeight:700}}>{q.to}</span>
+                <Btn onClick={check} color="#0d9488">Go!</Btn>
+              </div>
+            </Card>
+          </div>}
+
+          {state==="done" && <div style={{textAlign:"center"}} className="bounce-in">
+            <div style={{fontSize:64,marginBottom:8}}>🏆</div>
+            <h2 style={{fontSize:24,marginBottom:8}}>Time's up!</h2>
+            <div style={{fontSize:36,fontWeight:800,color:"#6ee7b7",marginBottom:8}}>{score} correct!</div>
+            <div style={{fontSize:14,opacity:0.8,marginBottom:4}}>
+              {score>=15?"Unbelievable! 🌟":score>=10?"Amazing work! 🎉":score>=5?"Great job! 💪":"Keep practising! 🚀"}
+            </div>
+            <div style={{fontSize:14,marginBottom:24}}>⭐ +{score>=15?5:score>=10?3:score>=5?2:1} stars</div>
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              <Btn onClick={start} big color="#f59e0b">Try Again ⚡</Btn>
+              <Btn onClick={()=>{clearInterval(timerRef.current);onBack();}} color="#6b7280">Back</Btn>
+            </div>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── WORD PROBLEMS ──────────────────────────────────────────────
+    function WordProblems({onBack, addStars}) {
+      const [problems] = useState(()=>shuffle(WORD_PROBLEMS));
+      const [idx,setIdx] = useState(0);
+      const [input,setInput] = useState("");
+      const [feedback,setFeedback] = useState(null);
+      const [score,setScore] = useState(0);
+      const [showConfetti,setShowConfetti] = useState(false);
+      const [showSteps,setShowSteps] = useState(false);
+      const inputRef = useRef(null);
+
+      const current = problems[idx % problems.length];
+
+      function check(){
+        const val = parseFloat(input);
+        if(isNaN(val)) return;
+        if(val===current.answer){
+          playSound("correct");
+          setFeedback("correct");
+          setScore(s=>s+1);
+          addStars(2);
+          if((score+1)%3===0){setShowConfetti(true);playSound("levelup");setTimeout(()=>setShowConfetti(false),100);}
+        } else {
+          playSound("wrong");
+          setFeedback("wrong");
+        }
+        setShowSteps(true);
+      }
+
+      function next(){
+        setIdx(i=>i+1);
+        setInput("");
+        setFeedback(null);
+        setShowSteps(false);
+        setTimeout(()=>inputRef.current?.focus(),100);
+      }
+
+      function handleKey(e){if(e.key==="Enter"&&!feedback)check();}
+
+      return<div style={{minHeight:"100vh",background:"linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)",padding:"16px",color:"#fff"}}>
+        <Confetti active={showConfetti}/>
+        <div style={{maxWidth:500,margin:"0 auto"}}>
+          <BackBar onBack={onBack} title="Word Problems 📝" />
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+            <span>Problem {(idx%problems.length)+1}/{problems.length}</span>
+            <span>⭐ {score*2}</span>
+          </div>
+
+          <Card style={{marginBottom:16}} className="fade-slide">
+            <div style={{fontSize:16,fontWeight:600,lineHeight:1.6,marginBottom:16}}>{current.q}</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input ref={inputRef} type="number" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
+                disabled={!!feedback}
+                style={{flex:1,padding:"10px 14px",borderRadius:10,border:"2px solid rgba(255,255,255,0.2)",
+                background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:18,textAlign:"center",outline:"none"}}
+                placeholder="?" autoFocus />
+              <span style={{fontWeight:700,fontSize:16}}>{current.unit}</span>
+            </div>
+          </Card>
+
+          {!feedback && <div style={{textAlign:"center"}}><Btn onClick={check} big color="#0d9488">Check ✓</Btn></div>}
+
+          {showSteps && <div className={feedback==="correct"?"bounce-in":"shake"}>
+            <Card style={{background:feedback==="correct"?"rgba(16,185,129,0.2)":"rgba(239,68,68,0.2)",marginBottom:12}}>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>
+                {feedback==="correct" ? randFrom(ENCOURAGEMENTS) : `Answer: ${current.answer} ${current.unit}`}
+              </div>
+              <div style={{fontSize:14,fontWeight:600,marginBottom:8,color:"#6ee7b7"}}>Step by step:</div>
+              {current.steps.map((step,i)=>
+                <div key={i} style={{fontSize:14,padding:"4px 0",opacity:0.9}}>
+                  {i+1}. {step}
+                </div>
+              )}
+            </Card>
+            <div style={{textAlign:"center"}}><Btn onClick={next} big color="#059669">Next →</Btn></div>
+          </div>}
+        </div>
+      </div>;
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen,setScreen] = useState("home");
+      const [stars,setStars] = useState(()=>{
+        try{return parseInt(localStorage.getItem("meas_stars"))||0;}catch(e){return 0;}
+      });
+
+      function addStars(n){
+        setStars(s=>{
+          const v=s+n;
+          try{localStorage.setItem("meas_stars",v);}catch(e){}
+          return v;
+        });
+      }
+
+      if(screen==="home") return<Home onNav={setScreen} totalStars={stars}/>;
+      if(screen==="learn") return<Learn onBack={()=>setScreen("home")}/>;
+      if(screen==="convert") return<ConvertIt onBack={()=>setScreen("home")} addStars={addStars}/>;
+      if(screen==="estimate") return<EstimateIt onBack={()=>setScreen("home")} addStars={addStars}/>;
+      if(screen==="speed") return<SpeedChallenge onBack={()=>setScreen("home")} addStars={addStars}/>;
+      if(screen==="word") return<WordProblems onBack={()=>setScreen("home")} addStars={addStars}/>;
+      return<Home onNav={setScreen} totalStars={stars}/>;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>

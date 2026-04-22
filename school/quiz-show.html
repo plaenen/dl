@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Who Wants to Be a Star? ⭐</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.08)} }
+    @keyframes slideUp { from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0) rotate(-10deg);opacity:0}70%{transform:scale(1.1) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1} }
+    @keyframes glow { 0%,100%{box-shadow:0 0 8px rgba(255,215,0,0.3)}50%{box-shadow:0 0 24px rgba(255,215,0,0.7)} }
+    @keyframes dramaticPulse { 0%,100%{opacity:1}50%{opacity:0.6} }
+    @keyframes barGrow { from{height:0}to{height:var(--bar-h)} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .slide-up{animation:slideUp .4s ease-out} .fade-slide{animation:fadeSlide .4s ease-out both}
+    .pop-in{animation:popIn .5s ease-out both}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ─── QUESTION BANK ──────────────────────────────────────────────
+    // difficulty: 1 = easy (Q1-Q3), 2 = medium (Q4-Q6), 3 = hard (Q7-Q10)
+    const QUESTIONS = [
+      // MATHS - Easy
+      { q: "What is 3 + 5?", options: ["7", "8", "9", "6"], answer: 1, category: "Maths", difficulty: 1 },
+      { q: "What is 10 - 4?", options: ["5", "7", "6", "8"], answer: 2, category: "Maths", difficulty: 1 },
+      { q: "What is 5 × 2?", options: ["12", "8", "15", "10"], answer: 3, category: "Maths", difficulty: 1 },
+      { q: "What is 12 ÷ 3?", options: ["3", "5", "4", "6"], answer: 2, category: "Maths", difficulty: 1 },
+      { q: "How many sides does a triangle have?", options: ["4", "2", "3", "5"], answer: 2, category: "Maths", difficulty: 1 },
+      { q: "What is double 15?", options: ["25", "30", "35", "20"], answer: 1, category: "Maths", difficulty: 1 },
+      // MATHS - Medium
+      { q: "What is 7 × 8?", options: ["54", "48", "56", "63"], answer: 2, category: "Maths", difficulty: 2 },
+      { q: "How many minutes in 2 hours?", options: ["100", "90", "60", "120"], answer: 3, category: "Maths", difficulty: 2 },
+      { q: "What fraction is equivalent to 1/2?", options: ["2/3", "3/5", "2/4", "1/3"], answer: 2, category: "Maths", difficulty: 2 },
+      { q: "What is the perimeter of a rectangle 5cm by 3cm?", options: ["15cm", "16cm", "8cm", "20cm"], answer: 1, category: "Maths", difficulty: 2 },
+      { q: "What is 9 × 6?", options: ["56", "45", "54", "63"], answer: 2, category: "Maths", difficulty: 2 },
+      { q: "What is half of 150?", options: ["70", "75", "80", "65"], answer: 1, category: "Maths", difficulty: 2 },
+      // MATHS - Hard
+      { q: "What is 144 ÷ 12?", options: ["11", "14", "12", "13"], answer: 2, category: "Maths", difficulty: 3 },
+      { q: "If you buy 3 items at £2.50 each, how much change from £10?", options: ["£2.00", "£3.50", "£2.50", "£1.50"], answer: 2, category: "Maths", difficulty: 3 },
+      { q: "What is 25% of 80?", options: ["25", "15", "20", "40"], answer: 2, category: "Maths", difficulty: 3 },
+      { q: "A shape has 4 equal sides but no right angles. What is it?", options: ["Square", "Rhombus", "Rectangle", "Trapezium"], answer: 1, category: "Maths", difficulty: 3 },
+      { q: "What is the area of a rectangle 8cm by 5cm?", options: ["26cm²", "40cm²", "13cm²", "35cm²"], answer: 1, category: "Maths", difficulty: 3 },
+
+      // ENGLISH - Easy
+      { q: "Which word rhymes with 'cat'?", options: ["Dog", "Bat", "Cup", "Sit"], answer: 1, category: "English", difficulty: 1 },
+      { q: "What does the prefix 'un-' mean?", options: ["Again", "Not", "Before", "After"], answer: 1, category: "English", difficulty: 1 },
+      { q: "Which is a noun: run, beautiful, or elephant?", options: ["Run", "Beautiful", "Elephant", "Quickly"], answer: 2, category: "English", difficulty: 1 },
+      // ENGLISH - Medium
+      { q: "Which is the correct spelling?", options: ["Seperate", "Separate", "Separete", "Seperete"], answer: 1, category: "English", difficulty: 2 },
+      { q: "In 'they're going home', they're means...", options: ["Their house", "They are", "Over there", "Belonging to them"], answer: 1, category: "English", difficulty: 2 },
+      { q: "What type of word is 'quickly'?", options: ["Noun", "Verb", "Adverb", "Adjective"], answer: 2, category: "English", difficulty: 2 },
+      { q: "Which sentence uses the correct 'there/their/they're'?", options: ["There happy", "Their going home", "They're my friends", "They're house is big"], answer: 2, category: "English", difficulty: 2 },
+      // ENGLISH - Hard
+      { q: "What is the past tense of 'catch'?", options: ["Catched", "Caught", "Catching", "Cotch"], answer: 1, category: "English", difficulty: 3 },
+      { q: "Which word is a synonym for 'enormous'?", options: ["Tiny", "Rapid", "Huge", "Bright"], answer: 2, category: "English", difficulty: 3 },
+      { q: "What is the plural of 'child'?", options: ["Childs", "Childes", "Children", "Childrens"], answer: 2, category: "English", difficulty: 3 },
+      { q: "Which sentence has a subordinate clause?", options: ["I like cake.", "Although it rained, we played.", "She ran fast.", "The dog barked."], answer: 1, category: "English", difficulty: 3 },
+
+      // SCIENCE - Easy
+      { q: "What do plants need to grow?", options: ["Darkness and ice", "Water and sunlight", "Only soil", "Just wind"], answer: 1, category: "Science", difficulty: 1 },
+      { q: "How many legs does an insect have?", options: ["4", "8", "6", "10"], answer: 2, category: "Science", difficulty: 1 },
+      { q: "What is the closest star to Earth?", options: ["Moon", "Mars", "The Sun", "Polaris"], answer: 2, category: "Science", difficulty: 1 },
+      // SCIENCE - Medium
+      { q: "What are the three states of matter?", options: ["Hot, warm, cold", "Solid, liquid, gas", "Big, medium, small", "Hard, soft, squishy"], answer: 1, category: "Science", difficulty: 2 },
+      { q: "Which material is a conductor of electricity?", options: ["Wood", "Rubber", "Metal", "Plastic"], answer: 2, category: "Science", difficulty: 2 },
+      { q: "What type of animal eats only plants?", options: ["Carnivore", "Herbivore", "Omnivore", "Insectivore"], answer: 1, category: "Science", difficulty: 2 },
+      { q: "What do plants need to make their own food?", options: ["Meat", "Sunlight", "Milk", "Cheese"], answer: 1, category: "Science", difficulty: 2 },
+      // SCIENCE - Hard
+      { q: "What is the process called when water turns to gas?", options: ["Condensation", "Evaporation", "Freezing", "Melting"], answer: 1, category: "Science", difficulty: 3 },
+      { q: "Which organ pumps blood around the body?", options: ["Brain", "Lungs", "Heart", "Stomach"], answer: 2, category: "Science", difficulty: 3 },
+      { q: "What type of rock is formed from layers of sediment?", options: ["Igneous", "Metamorphic", "Sedimentary", "Volcanic"], answer: 2, category: "Science", difficulty: 3 },
+      { q: "Sound travels fastest through which material?", options: ["Air", "Water", "Steel", "Vacuum"], answer: 2, category: "Science", difficulty: 3 },
+
+      // GEOGRAPHY - Easy
+      { q: "What is the capital of the UK?", options: ["Manchester", "London", "Edinburgh", "Birmingham"], answer: 1, category: "Geography", difficulty: 1 },
+      { q: "Which is the biggest ocean?", options: ["Atlantic", "Indian", "Arctic", "Pacific"], answer: 3, category: "Geography", difficulty: 1 },
+      // GEOGRAPHY - Medium
+      { q: "Which continent is the UAE in?", options: ["Africa", "Asia", "Europe", "South America"], answer: 1, category: "Geography", difficulty: 2 },
+      { q: "Which ocean is between Europe and America?", options: ["Pacific", "Indian", "Atlantic", "Arctic"], answer: 2, category: "Geography", difficulty: 2 },
+      { q: "What country is Hong Kong in?", options: ["Japan", "China", "Thailand", "Korea"], answer: 1, category: "Geography", difficulty: 2 },
+      // GEOGRAPHY - Hard
+      { q: "What is the longest river in the world?", options: ["Amazon", "Nile", "Mississippi", "Thames"], answer: 1, category: "Geography", difficulty: 3 },
+      { q: "In which country would you find the Eiffel Tower?", options: ["Italy", "France", "Spain", "Germany"], answer: 1, category: "Geography", difficulty: 3 },
+      { q: "Which country has the most people in the world?", options: ["USA", "China", "India", "Russia"], answer: 2, category: "Geography", difficulty: 3 },
+      { q: "What are lines of latitude and longitude used for?", options: ["Measuring height", "Finding locations", "Telling time", "Measuring temperature"], answer: 1, category: "Geography", difficulty: 3 },
+
+      // GENERAL KNOWLEDGE - Easy
+      { q: "How many days in a week?", options: ["5", "6", "7", "8"], answer: 2, category: "General", difficulty: 1 },
+      { q: "What colour do you get mixing red and yellow?", options: ["Green", "Purple", "Orange", "Pink"], answer: 2, category: "General", difficulty: 1 },
+      { q: "How many sides does a hexagon have?", options: ["5", "6", "7", "8"], answer: 1, category: "General", difficulty: 1 },
+      // GENERAL KNOWLEDGE - Medium
+      { q: "How many days in a leap year?", options: ["364", "365", "366", "367"], answer: 2, category: "General", difficulty: 2 },
+      { q: "What shape is a stop sign?", options: ["Circle", "Square", "Octagon", "Triangle"], answer: 2, category: "General", difficulty: 2 },
+      { q: "What colour do you get mixing blue and yellow?", options: ["Green", "Purple", "Orange", "Brown"], answer: 0, category: "General", difficulty: 2 },
+      // GENERAL KNOWLEDGE - Hard
+      { q: "How many bones does an adult human body have?", options: ["106", "206", "306", "150"], answer: 1, category: "General", difficulty: 3 },
+      { q: "What year did World War 2 end?", options: ["1943", "1944", "1945", "1946"], answer: 2, category: "General", difficulty: 3 },
+
+      // FUN - Easy
+      { q: "What is the largest animal on Earth?", options: ["Elephant", "Blue Whale", "Giraffe", "Shark"], answer: 1, category: "Fun", difficulty: 1 },
+      { q: "How many legs does a spider have?", options: ["6", "10", "8", "4"], answer: 2, category: "Fun", difficulty: 1 },
+      { q: "What planet is known as the Red Planet?", options: ["Venus", "Jupiter", "Mars", "Saturn"], answer: 2, category: "Fun", difficulty: 1 },
+      // FUN - Medium
+      { q: "What is the fastest land animal?", options: ["Lion", "Horse", "Cheetah", "Leopard"], answer: 2, category: "Fun", difficulty: 2 },
+      { q: "Which planet has the most moons?", options: ["Mars", "Jupiter", "Saturn", "Neptune"], answer: 2, category: "Fun", difficulty: 2 },
+      { q: "What is a group of lions called?", options: ["Pack", "Flock", "Herd", "Pride"], answer: 3, category: "Fun", difficulty: 2 },
+      // FUN - Hard
+      { q: "What is the hardest natural substance on Earth?", options: ["Gold", "Iron", "Diamond", "Platinum"], answer: 2, category: "Fun", difficulty: 3 },
+      { q: "How many teeth does an adult human have?", options: ["28", "30", "32", "36"], answer: 2, category: "Fun", difficulty: 3 },
+      { q: "What is the smallest country in the world?", options: ["Monaco", "Vatican City", "San Marino", "Luxembourg"], answer: 1, category: "Fun", difficulty: 3 },
+      { q: "Which animal can sleep for up to 3 years?", options: ["Bear", "Snail", "Tortoise", "Sloth"], answer: 1, category: "Fun", difficulty: 3 },
+    ];
+
+    const PRIZE_LADDER = [
+      { stars: 10, label: "10 ⭐", safe: false },
+      { stars: 20, label: "20 ⭐", safe: false },
+      { stars: 50, label: "50 ⭐", safe: false },
+      { stars: 100, label: "100 ⭐", safe: false },
+      { stars: 200, label: "200 ⭐", safe: true },
+      { stars: 500, label: "500 ⭐", safe: false },
+      { stars: 1000, label: "1,000 ⭐", safe: false },
+      { stars: 2000, label: "2,000 ⭐", safe: false },
+      { stars: 5000, label: "5,000 ⭐", safe: false },
+      { stars: 10000, label: "10,000 ⭐", safe: true },
+    ];
+
+    const OPTION_LABELS = ["A", "B", "C", "D"];
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟", "Brilliant! 💡", "Superstar! ⭐", "You rock! 🪨",
+      "Incredible! 🌈", "Genius! 🧠", "Fantastic! 🎉", "Wow! 🚀",
+      "Perfect! 🎯", "On fire! 🔥", "Legend! 🏆", "Unstoppable! ⚡",
+    ];
+
+    const WRONG_MESSAGES = [
+      "So close! Don't give up! 💪", "Nearly there! Keep going! 🌟",
+      "Good try! You'll get it next time! 😊", "That was a tough one! 🌈",
+    ];
+
+    const PHONE_HINTS = {
+      "Maths": [
+        "I'm pretty sure you need to think about the numbers carefully...",
+        "Try working it out step by step!",
+        "I remember learning this - think about what you know!",
+      ],
+      "English": [
+        "Sound it out in your head...",
+        "Think about the spelling rules you've learned!",
+        "I think I remember this from school...",
+      ],
+      "Science": [
+        "Think about what you've learned in science class!",
+        "Remember your experiments...",
+        "This is about how the world works!",
+      ],
+      "Geography": [
+        "Picture a map in your head...",
+        "Think about where things are in the world!",
+        "I've seen this on a map before...",
+      ],
+      "General": [
+        "I think I know this one... let me think...",
+        "This is a fun fact I learned once!",
+        "Use what you already know!",
+      ],
+      "Fun": [
+        "Ooh, I love this question! Think carefully...",
+        "This is a really cool fact!",
+        "I saw this on a nature show once...",
+      ],
+    };
+
+    // ─── HELPERS ────────────────────────────────────────────────────
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.value = 0.15;
+        if (type === "correct") {
+          osc.frequency.value = 523; osc.start();
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.35);
+          osc.stop(ctx.currentTime + 0.35);
+        } else if (type === "wrong") {
+          osc.frequency.value = 200; osc.type = "sawtooth"; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+          osc.stop(ctx.currentTime + 0.3);
+        } else if (type === "dramatic") {
+          osc.frequency.value = 220; osc.type = "sine"; osc.start();
+          gain.gain.value = 0.08;
+          osc.frequency.setValueAtTime(220, ctx.currentTime + 0.5);
+          osc.frequency.setValueAtTime(277, ctx.currentTime + 1.0);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 1.5);
+          osc.stop(ctx.currentTime + 1.5);
+        } else if (type === "click") {
+          osc.frequency.value = 800; osc.start();
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.08);
+          osc.stop(ctx.currentTime + 0.08);
+        } else if (type === "win") {
+          osc.frequency.value = 523; osc.start();
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15);
+          osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3);
+          osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.45);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.7);
+          osc.stop(ctx.currentTime + 0.7);
+        } else if (type === "safe") {
+          osc.frequency.value = 440; osc.start();
+          osc.frequency.setValueAtTime(554, ctx.currentTime + 0.12);
+          osc.frequency.setValueAtTime(659, ctx.currentTime + 0.24);
+          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.36);
+          gain.gain.setValueAtTime(0, ctx.currentTime + 0.55);
+          osc.stop(ctx.currentTime + 0.55);
+        }
+      } catch (e) {}
+    }
+
+    function loadStars() {
+      try { return parseInt(localStorage.getItem("quiz_stars")) || 0; } catch { return 0; }
+    }
+    function saveStars(n) {
+      try { localStorage.setItem("quiz_stars", n); } catch {}
+    }
+
+    function pickQuestions() {
+      const easy = shuffle(QUESTIONS.filter(q => q.difficulty === 1));
+      const medium = shuffle(QUESTIONS.filter(q => q.difficulty === 2));
+      const hard = shuffle(QUESTIONS.filter(q => q.difficulty === 3));
+      const picked = [
+        ...easy.slice(0, 3),
+        ...medium.slice(0, 4),
+        ...hard.slice(0, 3),
+      ];
+      return picked;
+    }
+
+    // ─── CONFETTI ───────────────────────────────────────────────────
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        const emojis = ["🌟", "⭐", "✨", "💫", "🎉", "🎊", "💛", "🏆"];
+        const p = Array.from({ length: 40 }, (_, i) => ({
+          id: i,
+          emoji: emojis[Math.floor(Math.random() * emojis.length)],
+          left: Math.random() * 100,
+          delay: Math.random() * 2,
+          size: 16 + Math.random() * 18,
+        }));
+        setPieces(p);
+        const t = setTimeout(() => setPieces([]), 4000);
+        return () => clearTimeout(t);
+      }, [active]);
+      return pieces.map(p => (
+        <div key={p.id} className="confetti-piece" style={{
+          left: p.left + "%", animationDelay: p.delay + "s", fontSize: p.size,
+        }}>{p.emoji}</div>
+      ));
+    }
+
+    // ─── AUDIENCE CHART ─────────────────────────────────────────────
+    function AudienceChart({ data, labels }) {
+      const max = Math.max(...data);
+      return (
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 16, height: 150, padding: "10px 0" }}>
+          {data.map((val, i) => (
+            <div key={i} style={{ textAlign: "center", flex: 1 }}>
+              <div style={{ fontSize: 13, color: "#ffd700", fontWeight: 700, marginBottom: 4 }}>{val}%</div>
+              <div style={{
+                height: Math.max(val * 1.2, 4), background: i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#8888aa",
+                borderRadius: 6, transition: "height 1s ease-out", minWidth: 36,
+              }} />
+              <div style={{ fontSize: 15, color: "#fff", fontWeight: 700, marginTop: 6 }}>{labels[i]}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ─── PRIZE LADDER ───────────────────────────────────────────────
+    function PrizeLadder({ currentQ, gameOver }) {
+      return (
+        <div style={{
+          background: "rgba(0,0,0,0.3)", borderRadius: 16, padding: "12px 16px",
+          border: "1px solid rgba(255,215,0,0.2)", width: "100%", maxWidth: 220,
+        }}>
+          <div style={{ fontSize: 13, color: "#ffd700", fontWeight: 700, textAlign: "center", marginBottom: 8, letterSpacing: 1 }}>
+            PRIZE LADDER
+          </div>
+          {[...PRIZE_LADDER].reverse().map((p, revIdx) => {
+            const idx = PRIZE_LADDER.length - 1 - revIdx;
+            const isCurrent = idx === currentQ && !gameOver;
+            const isPast = idx < currentQ;
+            return (
+              <div key={idx} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "5px 10px", borderRadius: 8, marginBottom: 2,
+                background: isCurrent ? "rgba(255,215,0,0.25)" : isPast ? "rgba(100,200,100,0.15)" : "transparent",
+                border: isCurrent ? "2px solid #ffd700" : p.safe ? "1px solid rgba(255,215,0,0.4)" : "1px solid transparent",
+                transition: "all 0.3s",
+              }}>
+                <span style={{ fontSize: 12, color: isPast ? "#66bb6a" : isCurrent ? "#ffd700" : "rgba(255,255,255,0.4)", fontWeight: 700 }}>
+                  Q{idx + 1}
+                </span>
+                <span style={{
+                  fontSize: 13, fontWeight: 700,
+                  color: isPast ? "#66bb6a" : isCurrent ? "#ffd700" : p.safe ? "rgba(255,215,0,0.7)" : "rgba(255,255,255,0.4)",
+                }}>
+                  {p.label} {p.safe ? "🔒" : ""}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ─── MAIN APP ───────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [stars, setStars] = useState(loadStars);
+      const [questions, setQuestions] = useState([]);
+      const [currentQ, setCurrentQ] = useState(0);
+      const [selected, setSelected] = useState(null);
+      const [revealed, setRevealed] = useState(false);
+      const [isCorrect, setIsCorrect] = useState(null);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [earnedStars, setEarnedStars] = useState(0);
+      const [gameOver, setGameOver] = useState(false);
+      const [walkAway, setWalkAway] = useState(false);
+
+      // Lifelines
+      const [fiftyUsed, setFiftyUsed] = useState(false);
+      const [audienceUsed, setAudienceUsed] = useState(false);
+      const [phoneUsed, setPhoneUsed] = useState(false);
+      const [removedOptions, setRemovedOptions] = useState([]);
+      const [showAudience, setShowAudience] = useState(false);
+      const [audienceData, setAudienceData] = useState(null);
+      const [showPhone, setShowPhone] = useState(false);
+      const [phoneMessage, setPhoneMessage] = useState("");
+
+      // Final answer confirmation
+      const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+
+      const addStars = (n) => {
+        const next = stars + n;
+        setStars(next);
+        saveStars(next);
+      };
+
+      function startGame() {
+        const q = pickQuestions();
+        setQuestions(q);
+        setCurrentQ(0);
+        setSelected(null);
+        setRevealed(false);
+        setIsCorrect(null);
+        setShowConfetti(false);
+        setEarnedStars(0);
+        setGameOver(false);
+        setWalkAway(false);
+        setFiftyUsed(false);
+        setAudienceUsed(false);
+        setPhoneUsed(false);
+        setRemovedOptions([]);
+        setShowAudience(false);
+        setAudienceData(null);
+        setShowPhone(false);
+        setPhoneMessage("");
+        setAwaitingConfirm(false);
+        setScreen("game");
+        playSound("click");
+      }
+
+      function handleSelect(idx) {
+        if (revealed || awaitingConfirm) return;
+        if (removedOptions.includes(idx)) return;
+        setSelected(idx);
+        setAwaitingConfirm(true);
+        playSound("click");
+      }
+
+      function handleFinalAnswer() {
+        if (selected === null) return;
+        setAwaitingConfirm(false);
+        playSound("dramatic");
+        // Dramatic pause before reveal
+        setTimeout(() => {
+          const q = questions[currentQ];
+          const correct = selected === q.answer;
+          setRevealed(true);
+          setIsCorrect(correct);
+          if (correct) {
+            playSound("correct");
+            const prize = PRIZE_LADDER[currentQ].stars;
+            setEarnedStars(prize);
+          } else {
+            playSound("wrong");
+            // Fell - get safe point value
+            const safeValue = currentQ >= 5 ? 200 : 0;
+            setEarnedStars(safeValue);
+          }
+        }, 1500);
+      }
+
+      function handleNext() {
+        const q = questions[currentQ];
+        const correct = selected === q.answer;
+
+        if (!correct) {
+          // Game over - wrong answer
+          const safeValue = currentQ >= 5 ? 200 : 0;
+          if (safeValue > 0) addStars(safeValue);
+          setGameOver(true);
+          setScreen("result");
+          return;
+        }
+
+        if (currentQ === 9) {
+          // Won the whole game!
+          addStars(10000);
+          setShowConfetti(true);
+          playSound("win");
+          setGameOver(true);
+          setScreen("result");
+          return;
+        }
+
+        // Safe point reached
+        if (PRIZE_LADDER[currentQ].safe) {
+          playSound("safe");
+        }
+
+        // Next question
+        setCurrentQ(currentQ + 1);
+        setSelected(null);
+        setRevealed(false);
+        setIsCorrect(null);
+        setRemovedOptions([]);
+        setShowAudience(false);
+        setAudienceData(null);
+        setShowPhone(false);
+        setPhoneMessage("");
+        setAwaitingConfirm(false);
+      }
+
+      function handleWalkAway() {
+        playSound("click");
+        const prize = currentQ > 0 ? PRIZE_LADDER[currentQ - 1].stars : 0;
+        setEarnedStars(prize);
+        if (prize > 0) addStars(prize);
+        setWalkAway(true);
+        setGameOver(true);
+        setScreen("result");
+      }
+
+      function useFiftyFifty() {
+        if (fiftyUsed || revealed || awaitingConfirm) return;
+        playSound("click");
+        const q = questions[currentQ];
+        const wrongIdxs = [0, 1, 2, 3].filter(i => i !== q.answer);
+        const toRemove = shuffle(wrongIdxs).slice(0, 2);
+        setRemovedOptions(toRemove);
+        setFiftyUsed(true);
+      }
+
+      function useAskAudience() {
+        if (audienceUsed || revealed || awaitingConfirm) return;
+        playSound("click");
+        const q = questions[currentQ];
+        // Weight towards correct answer
+        const correctWeight = 40 + Math.floor(Math.random() * 30); // 40-70%
+        let remaining = 100 - correctWeight;
+        const data = [0, 0, 0, 0];
+        data[q.answer] = correctWeight;
+        const others = [0, 1, 2, 3].filter(i => i !== q.answer);
+        others.forEach((idx, i) => {
+          if (i === others.length - 1) {
+            data[idx] = remaining;
+          } else {
+            const val = Math.floor(Math.random() * remaining);
+            data[idx] = val;
+            remaining -= val;
+          }
+        });
+        setAudienceData(data);
+        setShowAudience(true);
+        setAudienceUsed(true);
+      }
+
+      function usePhoneFriend() {
+        if (phoneUsed || revealed || awaitingConfirm) return;
+        playSound("click");
+        const q = questions[currentQ];
+        const hints = PHONE_HINTS[q.category] || PHONE_HINTS["General"];
+        const hint = hints[Math.floor(Math.random() * hints.length)];
+        const friendConfidence = Math.random() > 0.3;
+        const friendAnswer = friendConfidence ? OPTION_LABELS[q.answer] : OPTION_LABELS[Math.floor(Math.random() * 4)];
+        setPhoneMessage(`📞 Your friend says: "${hint} I think it might be ${friendAnswer}!"`);
+        setShowPhone(true);
+        setPhoneUsed(true);
+      }
+
+      // ─── HOME SCREEN ─────────────────────────────────────────────
+      if (screen === "home") {
+        return (
+          <div style={{
+            minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            background: "linear-gradient(135deg, #0c0033 0%, #1a0066 30%, #0d0042 60%, #000022 100%)",
+            padding: 24, position: "relative",
+          }}>
+            <a href="index.html" style={{
+              position: "absolute", top: 16, left: 16, width: 36, height: 36, borderRadius: 10,
+              background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none",
+            }}>🏠</a>
+
+            <div style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,215,0,0.15)", borderRadius: 12, padding: "6px 14px" }}>
+              <span style={{ color: "#ffd700", fontWeight: 700, fontSize: 15 }}>⭐ {stars.toLocaleString()}</span>
+            </div>
+
+            <div className="bounce-in" style={{ textAlign: "center", marginBottom: 32 }}>
+              <div style={{ fontSize: 64, marginBottom: 8 }} className="float">⭐</div>
+              <h1 style={{ color: "#ffd700", fontSize: 32, fontWeight: 800, textShadow: "0 0 20px rgba(255,215,0,0.4)" }}>
+                Who Wants to Be a Star?
+              </h1>
+              <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 16, marginTop: 8 }}>
+                Answer 10 questions to win 10,000 stars!
+              </p>
+            </div>
+
+            <button onClick={startGame} className="pulse" style={{
+              background: "linear-gradient(135deg, #ffd700, #ffaa00)", color: "#1a0066",
+              border: "none", borderRadius: 20, padding: "18px 48px", fontSize: 22, fontWeight: 800,
+              cursor: "pointer", boxShadow: "0 4px 24px rgba(255,215,0,0.4)", letterSpacing: 1,
+              transition: "transform 0.2s",
+            }}>
+              🎮 Play Now!
+            </button>
+
+            <div style={{ marginTop: 32, textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+              <p>💡 3 lifelines to help you</p>
+              <p>🔒 Safe points at Q5 and Q10</p>
+              <p>🏆 Can you win 10,000 stars?</p>
+            </div>
+          </div>
+        );
+      }
+
+      // ─── RESULT SCREEN ────────────────────────────────────────────
+      if (screen === "result") {
+        const won = currentQ === 9 && isCorrect;
+        const message = won
+          ? "YOU WON 10,000 STARS! 🏆"
+          : walkAway
+          ? `You walked away with ${earnedStars.toLocaleString()} ⭐!`
+          : isCorrect === false
+          ? `Game Over! You won ${earnedStars.toLocaleString()} ⭐`
+          : "";
+
+        return (
+          <div style={{
+            minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            background: won ? "linear-gradient(135deg, #1a0066 0%, #4a0e8f 50%, #1a0066 100%)" : "linear-gradient(135deg, #0c0033 0%, #1a0066 50%, #000022 100%)",
+            padding: 24,
+          }}>
+            <Confetti active={showConfetti} />
+
+            <div className="bounce-in" style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 80, marginBottom: 16 }}>{won ? "🏆" : walkAway ? "🚶" : "💫"}</div>
+              <h1 style={{ color: "#ffd700", fontSize: 28, fontWeight: 800, marginBottom: 12, textShadow: "0 0 20px rgba(255,215,0,0.4)" }}>
+                {message}
+              </h1>
+              {!won && isCorrect === false && !walkAway && (
+                <div className="fade-slide" style={{ marginTop: 12 }}>
+                  <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, marginBottom: 4 }}>
+                    The correct answer was:
+                  </p>
+                  <p style={{ color: "#66bb6a", fontSize: 18, fontWeight: 700 }}>
+                    {OPTION_LABELS[questions[currentQ].answer]}: {questions[currentQ].options[questions[currentQ].answer]}
+                  </p>
+                </div>
+              )}
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 15, marginTop: 16 }}>
+                Total stars: ⭐ {stars.toLocaleString()}
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginTop: 4 }}>
+                {won ? ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)] : WRONG_MESSAGES[Math.floor(Math.random() * WRONG_MESSAGES.length)]}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
+              <button onClick={startGame} style={{
+                background: "linear-gradient(135deg, #ffd700, #ffaa00)", color: "#1a0066",
+                border: "none", borderRadius: 16, padding: "14px 32px", fontSize: 18, fontWeight: 700,
+                cursor: "pointer", boxShadow: "0 4px 16px rgba(255,215,0,0.3)",
+              }}>
+                🎮 Play Again
+              </button>
+              <button onClick={() => setScreen("home")} style={{
+                background: "rgba(255,255,255,0.1)", color: "#fff",
+                border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 24px",
+                fontSize: 18, fontWeight: 700, cursor: "pointer",
+              }}>
+                🏠 Home
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // ─── GAME SCREEN ─────────────────────────────────────────────
+      const q = questions[currentQ];
+      if (!q) return null;
+
+      return (
+        <div style={{
+          minHeight: "100vh", display: "flex", flexDirection: "column",
+          background: "linear-gradient(135deg, #0c0033 0%, #1a0066 30%, #0d0042 60%, #000022 100%)",
+          padding: "16px 16px 24px",
+        }}>
+          {/* Top bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={useFiftyFifty} disabled={fiftyUsed || revealed || awaitingConfirm} style={{
+                background: fiftyUsed ? "rgba(255,255,255,0.05)" : "rgba(255,215,0,0.15)",
+                border: fiftyUsed ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,215,0,0.4)",
+                borderRadius: 12, padding: "8px 12px", cursor: fiftyUsed ? "default" : "pointer",
+                color: fiftyUsed ? "rgba(255,255,255,0.2)" : "#ffd700", fontSize: 13, fontWeight: 700,
+                opacity: fiftyUsed ? 0.5 : 1,
+              }}>
+                50:50
+              </button>
+              <button onClick={useAskAudience} disabled={audienceUsed || revealed || awaitingConfirm} style={{
+                background: audienceUsed ? "rgba(255,255,255,0.05)" : "rgba(255,215,0,0.15)",
+                border: audienceUsed ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,215,0,0.4)",
+                borderRadius: 12, padding: "8px 12px", cursor: audienceUsed ? "default" : "pointer",
+                color: audienceUsed ? "rgba(255,255,255,0.2)" : "#ffd700", fontSize: 13, fontWeight: 700,
+                opacity: audienceUsed ? 0.5 : 1,
+              }}>
+                👥 Audience
+              </button>
+              <button onClick={usePhoneFriend} disabled={phoneUsed || revealed || awaitingConfirm} style={{
+                background: phoneUsed ? "rgba(255,255,255,0.05)" : "rgba(255,215,0,0.15)",
+                border: phoneUsed ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,215,0,0.4)",
+                borderRadius: 12, padding: "8px 12px", cursor: phoneUsed ? "default" : "pointer",
+                color: phoneUsed ? "rgba(255,255,255,0.2)" : "#ffd700", fontSize: 13, fontWeight: 700,
+                opacity: phoneUsed ? 0.5 : 1,
+              }}>
+                📞 Phone
+              </button>
+            </div>
+            <div style={{ background: "rgba(255,215,0,0.15)", borderRadius: 12, padding: "6px 14px" }}>
+              <span style={{ color: "#ffd700", fontWeight: 700, fontSize: 14 }}>⭐ {stars.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Main content area */}
+          <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+            {/* Question area */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              {/* Question number and category */}
+              <div style={{ textAlign: "center", marginBottom: 8 }}>
+                <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: 600 }}>
+                  Question {currentQ + 1} of 10 &bull; {q.category}
+                </span>
+                <div style={{ color: "#ffd700", fontSize: 14, fontWeight: 700, marginTop: 2 }}>
+                  Playing for: {PRIZE_LADDER[currentQ].label}
+                </div>
+              </div>
+
+              {/* Question card */}
+              <div className="fade-slide" key={currentQ} style={{
+                background: "rgba(0,0,0,0.3)", borderRadius: 20, padding: "24px 20px",
+                border: "1px solid rgba(255,215,0,0.2)", textAlign: "center", marginBottom: 16,
+              }}>
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, lineHeight: 1.4 }}>
+                  {q.q}
+                </h2>
+              </div>
+
+              {/* Audience chart popup */}
+              {showAudience && audienceData && (
+                <div className="bounce-in" style={{
+                  background: "rgba(0,0,0,0.4)", borderRadius: 16, padding: 16, marginBottom: 12,
+                  border: "1px solid rgba(255,215,0,0.2)",
+                }}>
+                  <div style={{ color: "#ffd700", fontSize: 13, fontWeight: 700, textAlign: "center", marginBottom: 4 }}>
+                    👥 Audience Results
+                  </div>
+                  <AudienceChart data={audienceData} labels={OPTION_LABELS} />
+                </div>
+              )}
+
+              {/* Phone a friend popup */}
+              {showPhone && (
+                <div className="bounce-in" style={{
+                  background: "rgba(0,0,0,0.4)", borderRadius: 16, padding: 16, marginBottom: 12,
+                  border: "1px solid rgba(255,215,0,0.2)", textAlign: "center",
+                }}>
+                  <p style={{ color: "#fff", fontSize: 14, fontStyle: "italic" }}>{phoneMessage}</p>
+                </div>
+              )}
+
+              {/* Options */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                {q.options.map((opt, i) => {
+                  const isRemoved = removedOptions.includes(i);
+                  const isSelected = selected === i;
+                  const isAnswer = revealed && i === q.answer;
+                  const isWrongPick = revealed && isSelected && i !== q.answer;
+
+                  let bg = "rgba(255,255,255,0.08)";
+                  let borderColor = "rgba(255,255,255,0.15)";
+                  let color = "#fff";
+
+                  if (isRemoved) {
+                    bg = "rgba(0,0,0,0.2)";
+                    borderColor = "rgba(255,255,255,0.05)";
+                    color = "rgba(255,255,255,0.15)";
+                  } else if (isAnswer) {
+                    bg = "rgba(76,175,80,0.3)";
+                    borderColor = "#4caf50";
+                    color = "#66ff66";
+                  } else if (isWrongPick) {
+                    bg = "rgba(244,67,54,0.3)";
+                    borderColor = "#f44336";
+                    color = "#ff6666";
+                  } else if (isSelected && !revealed) {
+                    bg = "rgba(255,215,0,0.2)";
+                    borderColor = "#ffd700";
+                    color = "#ffd700";
+                  }
+
+                  return (
+                    <button key={i} onClick={() => handleSelect(i)} disabled={isRemoved || revealed} className={isWrongPick ? "shake" : isAnswer ? "bounce-in" : ""} style={{
+                      background: bg, border: `2px solid ${borderColor}`, borderRadius: 14,
+                      padding: "14px 16px", cursor: isRemoved || revealed ? "default" : "pointer",
+                      display: "flex", alignItems: "center", gap: 10, transition: "all 0.3s",
+                      opacity: isRemoved ? 0.3 : 1,
+                    }}>
+                      <span style={{
+                        background: isSelected && !isRemoved ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.1)",
+                        borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                        fontWeight: 800, fontSize: 14, color: color, flexShrink: 0,
+                      }}>
+                        {OPTION_LABELS[i]}
+                      </span>
+                      <span style={{ color: color, fontSize: 15, fontWeight: 600, textAlign: "left" }}>
+                        {isRemoved ? "—" : opt}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                {awaitingConfirm && !revealed && (
+                  <button onClick={handleFinalAnswer} style={{
+                    background: "linear-gradient(135deg, #ffd700, #ffaa00)", color: "#1a0066",
+                    border: "none", borderRadius: 14, padding: "12px 32px", fontSize: 17, fontWeight: 800,
+                    cursor: "pointer", boxShadow: "0 4px 16px rgba(255,215,0,0.4)",
+                    animation: "glow 1.5s ease-in-out infinite",
+                  }}>
+                    Final Answer! 🎯
+                  </button>
+                )}
+                {awaitingConfirm && !revealed && (
+                  <button onClick={() => { setSelected(null); setAwaitingConfirm(false); playSound("click"); }} style={{
+                    background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)",
+                    border: "1px solid rgba(255,255,255,0.15)", borderRadius: 14, padding: "12px 20px",
+                    fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  }}>
+                    Change Answer
+                  </button>
+                )}
+                {revealed && (
+                  <div className="bounce-in" style={{ textAlign: "center", width: "100%" }}>
+                    <p style={{
+                      color: isCorrect ? "#66ff66" : "#ff6666", fontSize: 20, fontWeight: 800, marginBottom: 12,
+                    }}>
+                      {isCorrect ? ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)] : "Oh no! 😢"}
+                    </p>
+                    <button onClick={handleNext} style={{
+                      background: isCorrect ? "linear-gradient(135deg, #4caf50, #66bb6a)" : "linear-gradient(135deg, #f44336, #ef5350)",
+                      color: "#fff", border: "none", borderRadius: 14, padding: "12px 32px",
+                      fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+                    }}>
+                      {isCorrect ? (currentQ === 9 ? "Claim Prize! 🏆" : "Next Question ➡️") : "See Results"}
+                    </button>
+                  </div>
+                )}
+                {!revealed && !awaitingConfirm && currentQ > 0 && (
+                  <button onClick={handleWalkAway} style={{
+                    background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)",
+                    border: "1px solid rgba(255,255,255,0.15)", borderRadius: 14, padding: "10px 20px",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}>
+                    Walk Away with {PRIZE_LADDER[currentQ - 1].label}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Prize ladder sidebar */}
+            <div style={{ display: "flex", alignItems: "flex-start", paddingTop: 8 }}>
+              <PrizeLadder currentQ={currentQ} gameOver={gameOver} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

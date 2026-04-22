@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fun Fractions!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes popIn { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    @keyframes fadeSlide { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes confettiFall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+    @keyframes rainbow { 0% { color: #ef4444; } 16% { color: #f97316; } 33% { color: #eab308; } 50% { color: #22c55e; } 66% { color: #3b82f6; } 83% { color: #8b5cf6; } 100% { color: #ef4444; } }
+    .bounce-in { animation: bounceIn 0.5s ease-out; }
+    .shake { animation: shake 0.4s ease-out; }
+    .float { animation: float 3s ease-in-out infinite; }
+    .pop-in { animation: popIn 0.3s ease-out both; }
+    .fade-slide { animation: fadeSlide 0.4s ease-out both; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .rainbow { animation: rainbow 3s linear infinite; }
+    .confetti-piece { position: fixed; top: -20px; animation: confettiFall 3s ease-in forwards; pointer-events: none; z-index: 9999; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─── HELPERS ────────────────────────────────────────────────────
+    function randFrom(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function shuffle(a) { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+    function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+    function simplify(n, d) { const g = gcd(Math.abs(n), Math.abs(d)); return [n / g, d / g]; }
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟", "Brilliant! 💡", "Superstar! ⭐", "You rock! 🪨",
+      "Incredible! 🌈", "Genius! 🧠", "Fantastic! 🎉", "Wow! 🚀",
+      "Perfect! 🎯", "On fire! 🔥", "Legend! 🏆", "Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪", "So close! 🌟", "Oops! No worries! 😊",
+      "Keep going! 🚀", "Nearly there! 🌈", "Don't give up! ✨",
+    ];
+
+    const SLICE_COLORS = ["#f97316", "#ef4444", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#06b6d4"];
+    const PIZZA_CRUST = "#d97706";
+    const PIZZA_BASE = "#fef3c7";
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type === "correct") { osc.frequency.value = 523; osc.start(); osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1); osc.frequency.setValueAtTime(784, ctx.currentTime + 0.2); gain.gain.setValueAtTime(0, ctx.currentTime + 0.35); osc.stop(ctx.currentTime + 0.35); }
+        else if (type === "wrong") { osc.frequency.value = 200; osc.type = "sawtooth"; osc.start(); gain.gain.setValueAtTime(0, ctx.currentTime + 0.3); osc.stop(ctx.currentTime + 0.3); }
+        else if (type === "levelup") { osc.frequency.value = 523; osc.start(); osc.frequency.setValueAtTime(659, ctx.currentTime + 0.15); osc.frequency.setValueAtTime(784, ctx.currentTime + 0.3); osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.45); gain.gain.setValueAtTime(0, ctx.currentTime + 0.7); osc.stop(ctx.currentTime + 0.7); }
+        else if (type === "click") { osc.frequency.value = 800; osc.start(); gain.gain.setValueAtTime(0, ctx.currentTime + 0.06); osc.stop(ctx.currentTime + 0.06); }
+        else if (type === "slice") { osc.frequency.value = 1200; osc.type = "triangle"; osc.start(); osc.frequency.setValueAtTime(600, ctx.currentTime + 0.15); gain.gain.setValueAtTime(0, ctx.currentTime + 0.2); osc.stop(ctx.currentTime + 0.2); }
+      } catch (e) {}
+    }
+
+    // ─── CONFETTI ───────────────────────────────────────────────────
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        setPieces(Array.from({ length: 25 }, (_, i) => ({ id: Date.now() + i, left: Math.random() * 100, delay: Math.random() * 0.5, emoji: randFrom(["🌟", "⭐", "🎉", "🎊", "✨", "💖", "🦋", "🌈", "🍕"]) })));
+        const t = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(t);
+      }, [active]);
+      return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left: `${p.left}%`, animationDelay: `${p.delay}s` }}>{p.emoji}</div>)}</>;
+    }
+
+    // ─── SVG PIZZA ──────────────────────────────────────────────────
+    function PizzaSVG({ denominator, filled, size = 160, onClick, interactive = false }) {
+      const r = size / 2 - 4;
+      const cx = size / 2;
+      const cy = size / 2;
+
+      function slicePath(i, total) {
+        const startAngle = (i * 2 * Math.PI) / total - Math.PI / 2;
+        const endAngle = ((i + 1) * 2 * Math.PI) / total - Math.PI / 2;
+        const x1 = cx + r * Math.cos(startAngle);
+        const y1 = cy + r * Math.sin(startAngle);
+        const x2 = cx + r * Math.cos(endAngle);
+        const y2 = cy + r * Math.sin(endAngle);
+        const large = endAngle - startAngle > Math.PI ? 1 : 0;
+        return `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z`;
+      }
+
+      return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle cx={cx} cy={cy} r={r} fill={PIZZA_BASE} stroke={PIZZA_CRUST} strokeWidth="3" />
+          {Array.from({ length: denominator }, (_, i) => {
+            const isFilled = i < filled;
+            return (
+              <path
+                key={i}
+                d={slicePath(i, denominator)}
+                fill={isFilled ? SLICE_COLORS[i % SLICE_COLORS.length] : "transparent"}
+                stroke={PIZZA_CRUST}
+                strokeWidth="2"
+                style={{ cursor: interactive ? "pointer" : "default", transition: "fill 0.3s" }}
+                onClick={() => interactive && onClick && onClick(i)}
+              />
+            );
+          })}
+          {/* Pepperoni dots on filled slices */}
+          {Array.from({ length: denominator }, (_, i) => {
+            if (i >= filled) return null;
+            const midAngle = ((i + 0.5) * 2 * Math.PI) / denominator - Math.PI / 2;
+            const dotR = r * 0.5;
+            const dx = cx + dotR * Math.cos(midAngle);
+            const dy = cy + dotR * Math.sin(midAngle);
+            return <circle key={`dot-${i}`} cx={dx} cy={dy} r={size * 0.04} fill="#dc2626" opacity="0.6" />;
+          })}
+        </svg>
+      );
+    }
+
+    // ─── SVG BAR ────────────────────────────────────────────────────
+    function BarSVG({ denominator, filled, width = 200, height = 40 }) {
+      const segW = width / denominator;
+      return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+          <rect x="0" y="0" width={width} height={height} rx="6" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
+          {Array.from({ length: denominator }, (_, i) => (
+            <rect
+              key={i}
+              x={i * segW}
+              y="0"
+              width={segW}
+              height={height}
+              rx={i === 0 ? 6 : i === denominator - 1 ? 6 : 0}
+              fill={i < filled ? SLICE_COLORS[i % SLICE_COLORS.length] : "transparent"}
+              stroke="#d97706"
+              strokeWidth="1.5"
+            />
+          ))}
+        </svg>
+      );
+    }
+
+    // ─── FRACTION DISPLAY ───────────────────────────────────────────
+    function FractionDisplay({ numerator, denominator, size = "big" }) {
+      const fs = size === "big" ? 32 : size === "med" ? 24 : 18;
+      return (
+        <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", fontWeight: 800, fontSize: fs, lineHeight: 1.1 }}>
+          <span>{numerator}</span>
+          <span style={{ width: "100%", height: 3, background: "currentColor", borderRadius: 2, margin: "2px 0" }}></span>
+          <span>{denominator}</span>
+        </span>
+      );
+    }
+
+    // ─── COMMON UI ──────────────────────────────────────────────────
+    function Btn({ children, onClick, color = "#f97316", big, disabled, style: s }) {
+      return <button onClick={() => { if (!disabled) { playSound("click"); onClick?.(); } }} disabled={disabled} style={{
+        padding: big ? "16px 32px" : "10px 20px", borderRadius: 14,
+        border: "3px solid transparent",
+        background: disabled ? "#cbd5e1" : color, color: "#fff", fontWeight: 700,
+        fontSize: big ? 18 : 14, cursor: disabled ? "default" : "pointer",
+        boxShadow: disabled ? "none" : `0 4px 14px ${color}44`, transition: "all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function BackBar({ onBack, title }) {
+      return <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", marginBottom: 12 }}>
+        <button onClick={() => { playSound("click"); onBack(); }} style={{
+          width: 36, height: 36, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.15)",
+          color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>←</button>
+        <span style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>{title}</span>
+      </div>;
+    }
+
+    function ModeCard({ emoji, title, desc, color, onClick }) {
+      return <button onClick={() => { playSound("click"); onClick(); }} style={{
+        display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", borderRadius: 16,
+        border: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.07)",
+        color: "#fff", cursor: "pointer", textAlign: "left", transition: "all 0.2s", width: "100%",
+      }}>
+        <div style={{ width: 50, height: 50, borderRadius: 14, background: color, display: "flex",
+          alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>{emoji}</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{title}</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{desc}</div>
+        </div>
+      </button>;
+    }
+
+    function Card({ children, style: s }) {
+      return <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 20, padding: 24, border: "2px solid rgba(255,255,255,0.1)", ...s }}>{children}</div>;
+    }
+
+    // ─── HOME SCREEN ────────────────────────────────────────────────
+    function Home({ onNav, totalStars }) {
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7c2d12 0%, #ea580c 40%, #f97316 70%, #fb923c 100%)", padding: "30px 16px", color: "#fff", position: "relative" }}>
+          <a href="index.html" style={{ position: "absolute", top: 16, left: 16, width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>🏠</a>
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ fontSize: 56, marginBottom: 8 }} className="float">🍕</div>
+            <h1 style={{ fontSize: 30, fontWeight: 800, marginBottom: 4 }}>
+              <span className="rainbow">Fun Fractions!</span>
+            </h1>
+            <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>Learn fractions with pizza, bars, and fun quizzes!</p>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 28 }}>⭐ {totalStars} stars collected</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left" }}>
+              <ModeCard emoji="🍕" title="Pizza Party" desc="Slice pizzas and learn what fractions mean!" color="#ef4444" onClick={() => onNav("pizza")} />
+              <ModeCard emoji="🎯" title="Name That Fraction" desc="See a shape — pick the right fraction!" color="#3b82f6" onClick={() => onNav("name")} />
+              <ModeCard emoji="🟰" title="Equivalent Fractions" desc="Discover fractions that are secretly the same!" color="#8b5cf6" onClick={() => onNav("equiv")} />
+              <ModeCard emoji="⚖️" title="Compare Fractions" desc="Which fraction is bigger? You decide!" color="#10b981" onClick={() => onNav("compare")} />
+              <ModeCard emoji="➕" title="Add Fractions" desc="Put fraction pieces together!" color="#ec4899" onClick={() => onNav("add")} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MODE 1: PIZZA PARTY (Learn) ────────────────────────────────
+    function PizzaParty({ onBack, addStars }) {
+      const DENOMS = [2, 3, 4, 5, 6, 8];
+      const [denomIdx, setDenomIdx] = useState(0);
+      const [filled, setFilled] = useState(0);
+      const [showExplain, setShowExplain] = useState(true);
+      const denom = DENOMS[denomIdx];
+
+      function handleSliceClick(i) {
+        playSound("slice");
+        if (i < filled) {
+          setFilled(i);
+        } else {
+          setFilled(i + 1);
+        }
+      }
+
+      function nextDenom() {
+        playSound("levelup");
+        addStars(1);
+        setDenomIdx((denomIdx + 1) % DENOMS.length);
+        setFilled(0);
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #fb923c 100%)", padding: "16px", color: "#fff" }}>
+          <BackBar onBack={onBack} title="Pizza Party 🍕" />
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            {showExplain && (
+              <Card style={{ marginBottom: 16 }}>
+                <div className="fade-slide" style={{ fontSize: 14, lineHeight: 1.6 }}>
+                  <p style={{ fontWeight: 700, marginBottom: 8, fontSize: 16 }}>What is a fraction? 🤔</p>
+                  <p>A fraction has two parts:</p>
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 20, margin: "12px 0" }}>
+                    <FractionDisplay numerator="numerator" denominator="denominator" size="small" />
+                  </div>
+                  <p><strong>Numerator</strong> = how many pieces you have</p>
+                  <p><strong>Denominator</strong> = how many equal pieces total</p>
+                  <Btn onClick={() => setShowExplain(false)} style={{ marginTop: 12 }}>Got it! Let me try! 🍕</Btn>
+                </div>
+              </Card>
+            )}
+
+            <Card style={{ marginBottom: 16 }}>
+              <p style={{ fontWeight: 700, marginBottom: 4, fontSize: 18 }}>Tap slices to colour them in!</p>
+              <p style={{ opacity: 0.7, fontSize: 13, marginBottom: 12 }}>This pizza has <strong>{denom}</strong> equal slices</p>
+              <div className="bounce-in" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <PizzaSVG denominator={denom} filled={filled} size={200} interactive={true} onClick={handleSliceClick} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: 12 }}>
+                <div style={{ fontSize: 20 }}>
+                  <FractionDisplay numerator={filled} denominator={denom} size="big" />
+                </div>
+                <div style={{ textAlign: "left", fontSize: 14, opacity: 0.8 }}>
+                  <div>{filled} coloured slice{filled !== 1 ? "s" : ""}</div>
+                  <div>out of {denom} total</div>
+                </div>
+              </div>
+              {filled === denom && (
+                <div className="pop-in" style={{ marginTop: 8 }}>
+                  <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>🎉 That's a whole pizza! {filled}/{denom} = 1 whole!</p>
+                </div>
+              )}
+            </Card>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
+              {DENOMS.map((d, i) => (
+                <Btn key={d} onClick={() => { setDenomIdx(i); setFilled(0); }}
+                  color={i === denomIdx ? "#ef4444" : "rgba(255,255,255,0.2)"}
+                  style={{ minWidth: 50 }}>
+                  {d} slices
+                </Btn>
+              ))}
+            </div>
+            <Btn onClick={nextDenom} color="#22c55e" big>Next Pizza! ⭐</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MODE 2: NAME THAT FRACTION ─────────────────────────────────
+    function NameThatFraction({ onBack, addStars }) {
+      const [question, setQuestion] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [streak, setStreak] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [qNum, setQNum] = useState(0);
+
+      function generateQuestion() {
+        const denoms = [2, 3, 4, 5, 6, 8];
+        const denom = randFrom(denoms);
+        const numer = Math.floor(Math.random() * denom) + 1;
+        const usePizza = Math.random() > 0.4;
+
+        // Generate wrong answers
+        const correct = `${numer}/${denom}`;
+        const wrongs = new Set();
+        while (wrongs.size < 3) {
+          const wd = randFrom(denoms);
+          const wn = Math.floor(Math.random() * wd) + 1;
+          const w = `${wn}/${wd}`;
+          if (w !== correct) wrongs.add(w);
+        }
+        const options = shuffle([correct, ...wrongs]);
+        return { numer, denom, usePizza, correct, options };
+      }
+
+      useEffect(() => { setQuestion(generateQuestion()); }, []);
+
+      function handleAnswer(opt) {
+        if (result) return;
+        setSelected(opt);
+        if (opt === question.correct) {
+          playSound("correct");
+          setResult("correct");
+          setScore(s => s + 1);
+          setStreak(s => s + 1);
+          addStars(1);
+          if ((streak + 1) % 5 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function next() {
+        setQuestion(generateQuestion());
+        setSelected(null);
+        setResult(null);
+        setShowConfetti(false);
+        setQNum(q => q + 1);
+      }
+
+      if (!question) return null;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #1e3a5f 0%, #3b82f6 50%, #60a5fa 100%)", padding: "16px", color: "#fff" }}>
+          <Confetti active={showConfetti} />
+          <BackBar onBack={onBack} title="Name That Fraction 🎯" />
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 16, marginBottom: 16 }}>
+              <span style={{ fontWeight: 700 }}>⭐ {score}</span>
+              <span style={{ fontWeight: 700 }}>🔥 {streak} streak</span>
+            </div>
+
+            <Card style={{ marginBottom: 16 }} key={qNum}>
+              <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>What fraction is coloured in?</p>
+              <div className="bounce-in" style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+                {question.usePizza
+                  ? <PizzaSVG denominator={question.denom} filled={question.numer} size={180} />
+                  : <BarSVG denominator={question.denom} filled={question.numer} width={240} height={48} />
+                }
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {question.options.map(opt => {
+                  const [n, d] = opt.split("/").map(Number);
+                  const isCorrect = opt === question.correct;
+                  const isSelected = opt === selected;
+                  let bg = "rgba(255,255,255,0.15)";
+                  let border = "2px solid rgba(255,255,255,0.2)";
+                  if (result && isCorrect) { bg = "#22c55e"; border = "2px solid #16a34a"; }
+                  else if (result && isSelected && !isCorrect) { bg = "#ef4444"; border = "2px solid #dc2626"; }
+                  return (
+                    <button key={opt} onClick={() => handleAnswer(opt)} disabled={!!result}
+                      className={result && isSelected ? (isCorrect ? "bounce-in" : "shake") : ""}
+                      style={{
+                        padding: "16px 8px", borderRadius: 14, background: bg, border,
+                        color: "#fff", cursor: result ? "default" : "pointer", transition: "all 0.2s",
+                      }}>
+                      <FractionDisplay numerator={n} denominator={d} size="med" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {result && (
+                <div className="fade-slide" style={{ marginTop: 16 }}>
+                  <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
+                    {result === "correct" ? randFrom(ENCOURAGEMENTS) : randFrom(WRONG_MSGS)}
+                  </p>
+                  {result === "correct" && (
+                    <p style={{ opacity: 0.8, fontSize: 14 }}>
+                      {question.numer} out of {question.denom} pieces = <strong>{question.numer}/{question.denom}</strong>
+                    </p>
+                  )}
+                  {result === "wrong" && (
+                    <p style={{ opacity: 0.8, fontSize: 14 }}>
+                      The answer was <strong>{question.correct}</strong> — {question.numer} coloured out of {question.denom} total
+                    </p>
+                  )}
+                  <Btn onClick={next} style={{ marginTop: 12 }} big>Next! →</Btn>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MODE 3: EQUIVALENT FRACTIONS ───────────────────────────────
+    function EquivalentFractions({ onBack, addStars }) {
+      const EQUIVS = [
+        { base: [1, 2], equivs: [[2, 4], [3, 6], [4, 8]] },
+        { base: [1, 3], equivs: [[2, 6], [3, 9]] },
+        { base: [2, 3], equivs: [[4, 6], [6, 9]] },
+        { base: [1, 4], equivs: [[2, 8], [3, 12]] },
+        { base: [3, 4], equivs: [[6, 8]] },
+        { base: [2, 5], equivs: [[4, 10]] },
+      ];
+
+      const [mode, setMode] = useState("learn"); // learn | quiz
+      const [learnIdx, setLearnIdx] = useState(0);
+      const [question, setQuestion] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [qKey, setQKey] = useState(0);
+
+      function generateQuiz() {
+        const eq = randFrom(EQUIVS);
+        const equiv = randFrom(eq.equivs);
+        const correct = `${equiv[0]}/${equiv[1]}`;
+
+        // Wrong answers
+        const wrongs = new Set();
+        while (wrongs.size < 3) {
+          const d = randFrom([2, 3, 4, 5, 6, 8, 9, 10, 12]);
+          const n = Math.floor(Math.random() * (d - 1)) + 1;
+          const w = `${n}/${d}`;
+          const [sn, sd] = simplify(n, d);
+          if (sn !== eq.base[0] || sd !== eq.base[1]) {
+            wrongs.add(w);
+          }
+        }
+        const options = shuffle([correct, ...wrongs]);
+        return { base: eq.base, equiv, correct, options, multiplier: equiv[1] / eq.base[1] };
+      }
+
+      useEffect(() => { setQuestion(generateQuiz()); }, []);
+
+      function handleQuizAnswer(opt) {
+        if (result) return;
+        setSelected(opt);
+        const [n, d] = opt.split("/").map(Number);
+        const [sn, sd] = simplify(n, d);
+        const isCorrect = sn === question.base[0] && sd === question.base[1];
+        if (isCorrect) {
+          playSound("correct");
+          setResult("correct");
+          setScore(s => s + 1);
+          addStars(1);
+          if ((score + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+        }
+      }
+
+      function nextQuiz() {
+        setQuestion(generateQuiz());
+        setSelected(null);
+        setResult(null);
+        setShowConfetti(false);
+        setQKey(k => k + 1);
+      }
+
+      const learnItem = EQUIVS[learnIdx];
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #4c1d95 0%, #7c3aed 50%, #a78bfa 100%)", padding: "16px", color: "#fff" }}>
+          <Confetti active={showConfetti} />
+          <BackBar onBack={onBack} title="Equivalent Fractions 🟰" />
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 }}>
+              <Btn onClick={() => setMode("learn")} color={mode === "learn" ? "#8b5cf6" : "rgba(255,255,255,0.2)"}>Learn 📖</Btn>
+              <Btn onClick={() => setMode("quiz")} color={mode === "quiz" ? "#8b5cf6" : "rgba(255,255,255,0.2)"}>Quiz 🎯</Btn>
+            </div>
+
+            {mode === "learn" && (
+              <Card key={learnIdx}>
+                <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>
+                  These fractions are all the same! 🤯
+                </p>
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                  <div className="bounce-in">
+                    <PizzaSVG denominator={learnItem.base[1]} filled={learnItem.base[0]} size={120} />
+                    <div style={{ marginTop: 4 }}><FractionDisplay numerator={learnItem.base[0]} denominator={learnItem.base[1]} size="med" /></div>
+                  </div>
+                  {learnItem.equivs.map(([n, d], i) => (
+                    <React.Fragment key={i}>
+                      <span style={{ fontSize: 28, fontWeight: 800 }}>=</span>
+                      <div className="bounce-in" style={{ animationDelay: `${(i + 1) * 0.2}s` }}>
+                        <PizzaSVG denominator={d} filled={n} size={120} />
+                        <div style={{ marginTop: 4 }}><FractionDisplay numerator={n} denominator={d} size="med" /></div>
+                      </div>
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                <Card style={{ background: "rgba(255,255,255,0.1)", marginBottom: 12 }}>
+                  <p style={{ fontWeight: 700, marginBottom: 8 }}>✨ The multiplication trick:</p>
+                  {learnItem.equivs.map(([n, d], i) => {
+                    const mult = d / learnItem.base[1];
+                    return (
+                      <p key={i} style={{ fontSize: 14, marginBottom: 4 }}>
+                        {learnItem.base[0]} × {mult} = {n} &nbsp;and&nbsp; {learnItem.base[1]} × {mult} = {d}
+                        &nbsp;→&nbsp; <strong>{learnItem.base[0]}/{learnItem.base[1]} = {n}/{d}</strong>
+                      </p>
+                    );
+                  })}
+                  <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>
+                    Multiply top AND bottom by the same number — the fraction stays the same!
+                  </p>
+                </Card>
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                  <Btn onClick={() => { setLearnIdx((learnIdx - 1 + EQUIVS.length) % EQUIVS.length); }} color="rgba(255,255,255,0.2)">← Prev</Btn>
+                  <Btn onClick={() => { setLearnIdx((learnIdx + 1) % EQUIVS.length); addStars(1); playSound("levelup"); }} color="#22c55e">Next → ⭐</Btn>
+                </div>
+              </Card>
+            )}
+
+            {mode === "quiz" && question && (
+              <Card key={qKey}>
+                <p style={{ fontWeight: 700, marginBottom: 4 }}>⭐ {score}</p>
+                <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>
+                  Which fraction equals <span style={{ color: "#fbbf24" }}>{question.base[0]}/{question.base[1]}</span>?
+                </p>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <PizzaSVG denominator={question.base[1]} filled={question.base[0]} size={140} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                  {question.options.map(opt => {
+                    const [n, d] = opt.split("/").map(Number);
+                    const [sn, sd] = simplify(n, d);
+                    const isCorrect = sn === question.base[0] && sd === question.base[1];
+                    const isSelected = opt === selected;
+                    let bg = "rgba(255,255,255,0.15)";
+                    let border = "2px solid rgba(255,255,255,0.2)";
+                    if (result && isCorrect) { bg = "#22c55e"; border = "2px solid #16a34a"; }
+                    else if (result && isSelected && !isCorrect) { bg = "#ef4444"; border = "2px solid #dc2626"; }
+                    return (
+                      <button key={opt} onClick={() => handleQuizAnswer(opt)} disabled={!!result}
+                        className={result && isSelected ? (isCorrect ? "bounce-in" : "shake") : ""}
+                        style={{ padding: "16px 8px", borderRadius: 14, background: bg, border, color: "#fff", cursor: result ? "default" : "pointer" }}>
+                        <FractionDisplay numerator={n} denominator={d} size="med" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {result && (
+                  <div className="fade-slide">
+                    <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+                      {result === "correct" ? randFrom(ENCOURAGEMENTS) : randFrom(WRONG_MSGS)}
+                    </p>
+                    {result === "correct" && (
+                      <p style={{ fontSize: 14, opacity: 0.8 }}>
+                        {question.base[0]}/{question.base[1]} = {question.equiv[0]}/{question.equiv[1]} (multiply top and bottom by {question.multiplier})
+                      </p>
+                    )}
+                    {result === "wrong" && (
+                      <p style={{ fontSize: 14, opacity: 0.8 }}>
+                        The answer was {question.equiv[0]}/{question.equiv[1]} — both equal {question.base[0]}/{question.base[1]}
+                      </p>
+                    )}
+                    <Btn onClick={nextQuiz} style={{ marginTop: 12 }} big>Next! →</Btn>
+                  </div>
+                )}
+              </Card>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MODE 4: COMPARE FRACTIONS ──────────────────────────────────
+    function CompareFractions({ onBack, addStars }) {
+      const [question, setQuestion] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [streak, setStreak] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [qKey, setQKey] = useState(0);
+
+      function generateQ() {
+        const denoms = [2, 3, 4, 5, 6, 8];
+        const sameDenom = Math.random() > 0.5;
+        let n1, d1, n2, d2;
+        if (sameDenom) {
+          d1 = randFrom(denoms);
+          d2 = d1;
+          n1 = Math.floor(Math.random() * d1) + 1;
+          n2 = Math.floor(Math.random() * d2) + 1;
+        } else {
+          d1 = randFrom(denoms);
+          d2 = randFrom(denoms.filter(d => d !== d1));
+          n1 = Math.floor(Math.random() * d1) + 1;
+          n2 = Math.floor(Math.random() * d2) + 1;
+        }
+        const v1 = n1 / d1;
+        const v2 = n2 / d2;
+        let answer;
+        if (Math.abs(v1 - v2) < 0.001) answer = "equal";
+        else if (v1 > v2) answer = "left";
+        else answer = "right";
+        return { n1, d1, n2, d2, answer, sameDenom };
+      }
+
+      useEffect(() => { setQuestion(generateQ()); }, []);
+
+      function handlePick(choice) {
+        if (result) return;
+        setSelected(choice);
+        if (choice === question.answer) {
+          playSound("correct");
+          setResult("correct");
+          setScore(s => s + 1);
+          setStreak(s => s + 1);
+          addStars(1);
+          if ((streak + 1) % 5 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+          setStreak(0);
+        }
+      }
+
+      function next() {
+        setQuestion(generateQ());
+        setSelected(null);
+        setResult(null);
+        setShowConfetti(false);
+        setQKey(k => k + 1);
+      }
+
+      if (!question) return null;
+
+      const barW = 200;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #064e3b 0%, #10b981 50%, #6ee7b7 100%)", padding: "16px", color: "#fff" }}>
+          <Confetti active={showConfetti} />
+          <BackBar onBack={onBack} title="Compare Fractions ⚖️" />
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 16, marginBottom: 16 }}>
+              <span style={{ fontWeight: 700 }}>⭐ {score}</span>
+              <span style={{ fontWeight: 700 }}>🔥 {streak} streak</span>
+            </div>
+
+            <Card key={qKey}>
+              <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>Which fraction is bigger?</p>
+
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 20, marginBottom: 16, flexWrap: "wrap" }}>
+                <div className="bounce-in">
+                  <PizzaSVG denominator={question.d1} filled={question.n1} size={130} />
+                  <div style={{ marginTop: 6 }}><FractionDisplay numerator={question.n1} denominator={question.d1} size="med" /></div>
+                </div>
+                <span style={{ fontSize: 32, fontWeight: 800 }}>vs</span>
+                <div className="bounce-in" style={{ animationDelay: "0.15s" }}>
+                  <PizzaSVG denominator={question.d2} filled={question.n2} size={130} />
+                  <div style={{ marginTop: 6 }}><FractionDisplay numerator={question.n2} denominator={question.d2} size="med" /></div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ textAlign: "center" }}>
+                  <BarSVG denominator={question.d1} filled={question.n1} width={barW} height={30} />
+                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>{question.n1}/{question.d1}</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <BarSVG denominator={question.d2} filled={question.n2} width={barW} height={30} />
+                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>{question.n2}/{question.d2}</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                {[
+                  { key: "left", label: `${question.n1}/${question.d1} is bigger` },
+                  { key: "equal", label: "They're equal!" },
+                  { key: "right", label: `${question.n2}/${question.d2} is bigger` },
+                ].map(opt => {
+                  let bg = "rgba(255,255,255,0.15)";
+                  let border = "2px solid rgba(255,255,255,0.2)";
+                  if (result && opt.key === question.answer) { bg = "#22c55e"; border = "2px solid #16a34a"; }
+                  else if (result && opt.key === selected && opt.key !== question.answer) { bg = "#ef4444"; border = "2px solid #dc2626"; }
+                  return (
+                    <button key={opt.key} onClick={() => handlePick(opt.key)} disabled={!!result}
+                      className={result && opt.key === selected ? (opt.key === question.answer ? "bounce-in" : "shake") : ""}
+                      style={{
+                        padding: "12px 16px", borderRadius: 14, background: bg, border,
+                        color: "#fff", fontWeight: 700, fontSize: 14, cursor: result ? "default" : "pointer",
+                      }}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {result && (
+                <div className="fade-slide" style={{ marginTop: 16 }}>
+                  <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+                    {result === "correct" ? randFrom(ENCOURAGEMENTS) : randFrom(WRONG_MSGS)}
+                  </p>
+                  <p style={{ fontSize: 14, opacity: 0.8 }}>
+                    {question.n1}/{question.d1} = {(question.n1 / question.d1).toFixed(2)} and {question.n2}/{question.d2} = {(question.n2 / question.d2).toFixed(2)}
+                    {question.answer === "equal" ? " — they're equal!" : question.answer === "left" ? ` — ${question.n1}/${question.d1} is bigger!` : ` — ${question.n2}/${question.d2} is bigger!`}
+                  </p>
+                  <Btn onClick={next} style={{ marginTop: 12 }} big>Next! →</Btn>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MODE 5: ADD FRACTIONS ──────────────────────────────────────
+    function AddFractions({ onBack, addStars }) {
+      const [question, setQuestion] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [qKey, setQKey] = useState(0);
+
+      function generateQ() {
+        // Same denominator addition
+        const denoms = [2, 3, 4, 5, 6, 8];
+        const d = randFrom(denoms);
+        const maxN = d;
+        const n1 = Math.floor(Math.random() * (maxN - 1)) + 1;
+        const n2 = Math.floor(Math.random() * (maxN - n1)) + 1;
+        const ansN = n1 + n2;
+        const ansD = d;
+        const [simpN, simpD] = simplify(ansN, ansD);
+        const isWhole = ansN === ansD;
+
+        // Generate wrong answers
+        const correct = isWhole ? `${ansD}/${ansD}` : `${ansN}/${ansD}`;
+        const wrongs = new Set();
+        while (wrongs.size < 3) {
+          const wn = Math.floor(Math.random() * (d * 2 - 1)) + 1;
+          const wd = randFrom([d, d * 2]);
+          const w = `${wn}/${wd}`;
+          if (w !== correct) wrongs.add(w);
+        }
+        const options = shuffle([correct, ...wrongs]);
+        return { n1, n2, d, ansN, ansD, simpN, simpD, isWhole, correct, options };
+      }
+
+      useEffect(() => { setQuestion(generateQ()); }, []);
+
+      function handleAnswer(opt) {
+        if (result) return;
+        setSelected(opt);
+        if (opt === question.correct) {
+          playSound("correct");
+          setResult("correct");
+          setScore(s => s + 1);
+          addStars(1);
+          if ((score + 1) % 3 === 0) setShowConfetti(true);
+        } else {
+          playSound("wrong");
+          setResult("wrong");
+        }
+      }
+
+      function next() {
+        setQuestion(generateQ());
+        setSelected(null);
+        setResult(null);
+        setShowConfetti(false);
+        setQKey(k => k + 1);
+      }
+
+      if (!question) return null;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #831843 0%, #ec4899 50%, #f9a8d4 100%)", padding: "16px", color: "#fff" }}>
+          <Confetti active={showConfetti} />
+          <BackBar onBack={onBack} title="Add Fractions ➕" />
+          <div style={{ maxWidth: 500, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ fontWeight: 700, marginBottom: 16 }}>⭐ {score}</div>
+
+            <Card key={qKey}>
+              <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 16 }}>Add these fractions!</p>
+
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                <div className="bounce-in">
+                  <PizzaSVG denominator={question.d} filled={question.n1} size={120} />
+                  <div style={{ marginTop: 4 }}><FractionDisplay numerator={question.n1} denominator={question.d} size="med" /></div>
+                </div>
+                <span style={{ fontSize: 32, fontWeight: 800 }}>+</span>
+                <div className="bounce-in" style={{ animationDelay: "0.15s" }}>
+                  <PizzaSVG denominator={question.d} filled={question.n2} size={120} />
+                  <div style={{ marginTop: 4 }}><FractionDisplay numerator={question.n2} denominator={question.d} size="med" /></div>
+                </div>
+                <span style={{ fontSize: 32, fontWeight: 800 }}>=</span>
+                <span style={{ fontSize: 40 }}>❓</span>
+              </div>
+
+              <Card style={{ background: "rgba(255,255,255,0.1)", marginBottom: 16, padding: 12 }}>
+                <p style={{ fontSize: 14, opacity: 0.9 }}>
+                  💡 <strong>Rule:</strong> Same denominator? Just add the numerators!
+                </p>
+                <p style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>
+                  {question.n1} + {question.n2} = {question.ansN} → so the answer is {question.ansN}/{question.ansD}
+                  {question.isWhole ? ` = 1 whole! 🎉` : ""}
+                </p>
+              </Card>
+
+              {result && (
+                <div className="fade-slide" style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Together they make:</p>
+                    <PizzaSVG denominator={question.d} filled={question.ansN} size={140} />
+                    <div style={{ marginTop: 4 }}>
+                      <FractionDisplay numerator={question.ansN} denominator={question.ansD} size="med" />
+                      {question.isWhole && <span style={{ fontSize: 20, fontWeight: 800, marginLeft: 8 }}>= 1 whole! 🍕</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                {question.options.map(opt => {
+                  const [n, d] = opt.split("/").map(Number);
+                  const isCorrect = opt === question.correct;
+                  const isSelected = opt === selected;
+                  let bg = "rgba(255,255,255,0.15)";
+                  let border = "2px solid rgba(255,255,255,0.2)";
+                  if (result && isCorrect) { bg = "#22c55e"; border = "2px solid #16a34a"; }
+                  else if (result && isSelected && !isCorrect) { bg = "#ef4444"; border = "2px solid #dc2626"; }
+                  return (
+                    <button key={opt} onClick={() => handleAnswer(opt)} disabled={!!result}
+                      className={result && isSelected ? (isCorrect ? "bounce-in" : "shake") : ""}
+                      style={{
+                        padding: "16px 8px", borderRadius: 14, background: bg, border,
+                        color: "#fff", cursor: result ? "default" : "pointer",
+                      }}>
+                      <FractionDisplay numerator={n} denominator={d} size="med" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {result && (
+                <div className="fade-slide">
+                  <p style={{ fontWeight: 700, fontSize: 16 }}>
+                    {result === "correct" ? randFrom(ENCOURAGEMENTS) : randFrom(WRONG_MSGS)}
+                  </p>
+                  {result === "wrong" && (
+                    <p style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>
+                      The answer was {question.correct} — add the numerators: {question.n1} + {question.n2} = {question.ansN}
+                    </p>
+                  )}
+                  <Btn onClick={next} style={{ marginTop: 12 }} big>Next! →</Btn>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [totalStars, setTotalStars] = useState(() => {
+        try { return parseInt(localStorage.getItem("frac_stars")) || 0; } catch { return 0; }
+      });
+
+      function addStars(n) {
+        setTotalStars(s => {
+          const next = s + n;
+          try { localStorage.setItem("frac_stars", next); } catch {}
+          return next;
+        });
+      }
+
+      function goHome() { setScreen("home"); }
+
+      switch (screen) {
+        case "pizza": return <PizzaParty onBack={goHome} addStars={addStars} />;
+        case "name": return <NameThatFraction onBack={goHome} addStars={addStars} />;
+        case "equiv": return <EquivalentFractions onBack={goHome} addStars={addStars} />;
+        case "compare": return <CompareFractions onBack={goHome} addStars={addStars} />;
+        case "add": return <AddFractions onBack={goHome} addStars={addStars} />;
+        default: return <Home onNav={setScreen} totalStars={totalStars} />;
+      }
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

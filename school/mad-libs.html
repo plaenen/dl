@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mad Libs Fun!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.08)} }
+    @keyframes slideUp { from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0) rotate(-10deg);opacity:0}70%{transform:scale(1.1) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1} }
+    @keyframes sparkle { 0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1.2)} }
+    @keyframes shimmer { 0%{background-position:-200% center}100%{background-position:200% center} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .slide-up{animation:slideUp .4s ease-out} .pop-in{animation:popIn .5s ease-out both}
+    .fade-slide{animation:fadeSlide .4s ease-out both}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+    input[type="text"] {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 22px; font-weight: 700; text-align: center;
+      padding: 16px 24px; border-radius: 16px; border: 3px solid rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.2); color: #fff; outline: none;
+      width: 100%; max-width: 400px; transition: all 0.3s;
+    }
+    input[type="text"]::placeholder { color: rgba(255,255,255,0.5); }
+    input[type="text"]:focus { border-color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.3); transform: scale(1.02); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─── SOUND EFFECTS ────────────────────────────────────────────
+    const audioCtx = () => window._audioCtx || (window._audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+    function playTone(freq, dur = 0.15, type = 'sine', vol = 0.15) {
+      try {
+        const ctx = audioCtx(), o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(vol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + dur);
+      } catch(e) {}
+    }
+    const sfx = {
+      click: () => playTone(880, 0.1, 'sine', 0.12),
+      submit: () => { playTone(523, 0.12); setTimeout(() => playTone(659, 0.12), 100); setTimeout(() => playTone(784, 0.15), 200); },
+      reveal: () => { [523,659,784,1047].forEach((f,i) => setTimeout(() => playTone(f, 0.2, 'sine', 0.12), i * 120)); },
+      star: () => { [784,988,1175].forEach((f,i) => setTimeout(() => playTone(f, 0.15, 'triangle', 0.1), i * 100)); },
+      pop: () => playTone(600, 0.08, 'sine', 0.1),
+    };
+
+    // ─── STARS ────────────────────────────────────────────────────
+    function getStars() { return parseInt(localStorage.getItem('madlib_stars') || '0'); }
+    function addStars(n) { const s = getStars() + n; localStorage.setItem('madlib_stars', s); return s; }
+
+    // ─── CONFETTI ─────────────────────────────────────────────────
+    function spawnConfetti() {
+      const emojis = ['✨','🌟','💖','🎉','🦄','🌈','💜','⭐','🎀','💫'];
+      for (let i = 0; i < 30; i++) {
+        setTimeout(() => {
+          const el = document.createElement('div');
+          el.className = 'confetti-piece';
+          el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          el.style.left = Math.random() * 100 + 'vw';
+          el.style.animationDuration = (2 + Math.random() * 2) + 's';
+          el.style.fontSize = (18 + Math.random() * 16) + 'px';
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 4000);
+        }, i * 60);
+      }
+    }
+
+    // ─── WORD TYPE HINTS ──────────────────────────────────────────
+    const WORD_HINTS = {
+      noun: { label: 'NOUN', hint: 'A naming word — person, place, or thing', examples: 'cat, school, pizza, rainbow' },
+      'plural noun': { label: 'PLURAL NOUN', hint: 'More than one thing', examples: 'cats, shoes, dragons, pancakes' },
+      verb: { label: 'VERB', hint: 'An action word — something you do', examples: 'run, eat, dance, fly' },
+      'verb past': { label: 'VERB (past tense)', hint: 'An action that already happened', examples: 'jumped, ate, flew, sparkled' },
+      'verb ending in ing': { label: 'VERB ending in -ING', hint: 'An action happening right now', examples: 'dancing, running, singing, eating' },
+      adjective: { label: 'ADJECTIVE', hint: 'A describing word — what something is like', examples: 'sparkly, huge, purple, fluffy' },
+      adverb: { label: 'ADVERB', hint: 'How you do something — usually ends in -ly', examples: 'quickly, silently, happily, loudly' },
+      number: { label: 'NUMBER', hint: 'Pick any number you like!', examples: '7, 42, 100, a million' },
+      colour: { label: 'COLOUR', hint: 'Any colour at all!', examples: 'pink, turquoise, golden, rainbow' },
+      animal: { label: 'ANIMAL', hint: 'Any creature — real or made up!', examples: 'unicorn, flamingo, dragon, kitten' },
+      food: { label: 'FOOD', hint: 'Something you can eat or drink', examples: 'spaghetti, chocolate, pickles, cake' },
+      name: { label: 'NAME', hint: 'A person\'s name — anyone at all!', examples: 'Luna, Captain Sparkle, Bob, Grandma' },
+      place: { label: 'PLACE', hint: 'Anywhere in the world (or beyond!)', examples: 'Paris, the moon, my bedroom, Narnia' },
+      body_part: { label: 'BODY PART', hint: 'A part of someone\'s body', examples: 'elbow, nose, tummy, eyebrow' },
+      clothing: { label: 'PIECE OF CLOTHING', hint: 'Something you wear', examples: 'tutu, wellies, crown, superhero cape' },
+      exclamation: { label: 'EXCLAMATION', hint: 'Something you shout out!', examples: 'Yikes! Hooray! Oh no! Wowza!' },
+      silly_word: { label: 'SILLY WORD', hint: 'Make up something funny!', examples: 'bloop, snazzle, wibblewobble, zonk' },
+    };
+
+    // ─── STORY TEMPLATES ──────────────────────────────────────────
+    const STORIES = [
+      {
+        id: 1, title: 'The Magical School Day', emoji: '🏫',
+        colour: '#e879a0',
+        prompts: [
+          { type: 'adjective', key: 'adj1' }, { type: 'animal', key: 'animal1' },
+          { type: 'food', key: 'food1' }, { type: 'verb ending in ing', key: 'ving1' },
+          { type: 'name', key: 'name1' }, { type: 'adjective', key: 'adj2' },
+          { type: 'noun', key: 'noun1' }, { type: 'verb past', key: 'vpast1' },
+          { type: 'number', key: 'num1' }, { type: 'adverb', key: 'adv1' },
+          { type: 'exclamation', key: 'exc1' },
+        ],
+        template: (w) => `Today was the most ${w.adj1} day at school ever! When I arrived, the teacher had turned into a giant ${w.animal1}. "Good morning, class!" she said, munching on a plate of ${w.food1}. In maths, instead of adding numbers, we spent the whole lesson ${w.ving1}. My best friend ${w.name1} accidentally turned the classroom ${w.adj2}, and a ${w.noun1} fell out of the ceiling! At lunchtime, the dinner ladies ${w.vpast1} across the playground while ${w.num1} frogs watched from the roof. The headteacher ${w.adv1} announced that homework was cancelled forever. "${w.exc1}" shouted everyone. Best school day EVER!`,
+      },
+      {
+        id: 2, title: 'My Pet Unicorn', emoji: '🦄',
+        colour: '#c084fc',
+        prompts: [
+          { type: 'name', key: 'name1' }, { type: 'colour', key: 'col1' },
+          { type: 'food', key: 'food1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'verb past', key: 'vpast1' }, { type: 'noun', key: 'noun1' },
+          { type: 'number', key: 'num1' }, { type: 'body_part', key: 'bp1' },
+          { type: 'adverb', key: 'adv1' }, { type: 'adjective', key: 'adj2' },
+          { type: 'silly_word', key: 'silly1' },
+        ],
+        template: (w) => `I always wanted a pet unicorn, and yesterday I finally got one! I named her ${w.name1}. She has a beautiful ${w.col1} mane and her favourite snack is ${w.food1}. The pet shop owner said she was the most ${w.adj1} unicorn they had ever seen. When I brought her home, she ${w.vpast1} all over the living room and knocked over Mum's favourite ${w.noun1}! She can do ${w.num1} tricks, and her best one is balancing on her ${w.bp1}. She ${w.adv1} flies around my bedroom every night, leaving ${w.adj2} sparkle trails everywhere. The only problem is, every time she sneezes, she shouts "${w.silly1}!" and the neighbours complain.`,
+      },
+      {
+        id: 3, title: 'The Birthday Party', emoji: '🎂',
+        colour: '#f472b6',
+        prompts: [
+          { type: 'number', key: 'num1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'animal', key: 'animal1' }, { type: 'food', key: 'food1' },
+          { type: 'name', key: 'name1' }, { type: 'verb past', key: 'vpast1' },
+          { type: 'clothing', key: 'cloth1' }, { type: 'noun', key: 'noun1' },
+          { type: 'verb ending in ing', key: 'ving1' }, { type: 'colour', key: 'col1' },
+          { type: 'exclamation', key: 'exc1' },
+        ],
+        template: (w) => `For my ${w.num1}th birthday, I had the most ${w.adj1} party ever! First, a ${w.animal1} jumped out of my birthday cake, which was made entirely of ${w.food1}. My friend ${w.name1} ${w.vpast1} through the front door wearing nothing but a ${w.cloth1}. The party magician tried to pull a ${w.noun1} out of his hat but ended up ${w.ving1} instead! All the balloons were ${w.col1} and kept floating into the neighbour's garden. When I blew out the candles, "${w.exc1}" everyone screamed, and the cake exploded into a million pieces. Mum said it was the messiest birthday in history, but I thought it was absolutely BRILLIANT!`,
+      },
+      {
+        id: 4, title: 'Space Adventure', emoji: '🚀',
+        colour: '#a78bfa',
+        prompts: [
+          { type: 'noun', key: 'noun1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'colour', key: 'col1' }, { type: 'animal', key: 'animal1' },
+          { type: 'food', key: 'food1' }, { type: 'verb past', key: 'vpast1' },
+          { type: 'number', key: 'num1' }, { type: 'adverb', key: 'adv1' },
+          { type: 'silly_word', key: 'silly1' }, { type: 'verb ending in ing', key: 'ving1' },
+        ],
+        template: (w) => `3... 2... 1... BLAST OFF! My rocket ship, made from an old ${w.noun1}, zoomed into space! I landed on Planet ${w.adj1}, where everything was ${w.col1}. The aliens there all looked like tiny ${w.animal1}s and they only ate ${w.food1} for every meal. Their leader ${w.vpast1} over to greet me and said their planet had ${w.num1} moons! They ${w.adv1} showed me their favourite dance, which involved shouting "${w.silly1}!" while ${w.ving1}. I taught them how to do a cartwheel and they made me an honorary space princess. I promised to visit again next Tuesday.`,
+      },
+      {
+        id: 5, title: 'The Cooking Disaster', emoji: '🍳',
+        colour: '#fb7185',
+        prompts: [
+          { type: 'food', key: 'food1' }, { type: 'number', key: 'num1' },
+          { type: 'animal', key: 'animal1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'noun', key: 'noun1' }, { type: 'colour', key: 'col1' },
+          { type: 'verb past', key: 'vpast1' }, { type: 'adverb', key: 'adv1' },
+          { type: 'food', key: 'food2' }, { type: 'exclamation', key: 'exc1' },
+          { type: 'verb ending in ing', key: 'ving1' },
+        ],
+        template: (w) => `I decided to make ${w.food1} for dinner. The recipe said I needed ${w.num1} cups of ${w.animal1} milk and a pinch of ${w.adj1} ${w.noun1}. I mixed everything together and it turned ${w.col1}! When I put it in the oven, it ${w.vpast1} so loudly that the dog hid under the bed. The kitchen ${w.adv1} filled with smoke that smelled like ${w.food2}. "${w.exc1}" screamed Mum when she saw the mess. The food was ${w.ving1} on the ceiling and dripping onto the cat. Dad said we should probably just order pizza. I think I need a few more cooking lessons.`,
+      },
+      {
+        id: 6, title: 'Fairy Tale Remix', emoji: '🧚',
+        colour: '#d946ef',
+        prompts: [
+          { type: 'name', key: 'name1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'animal', key: 'animal1' }, { type: 'food', key: 'food1' },
+          { type: 'clothing', key: 'cloth1' }, { type: 'verb past', key: 'vpast1' },
+          { type: 'noun', key: 'noun1' }, { type: 'number', key: 'num1' },
+          { type: 'adverb', key: 'adv1' }, { type: 'adjective', key: 'adj2' },
+          { type: 'silly_word', key: 'silly1' },
+        ],
+        template: (w) => `Once upon a time, there was a princess called ${w.name1} who lived in a ${w.adj1} castle. One day, a ${w.animal1} appeared at the door and demanded a bowl of ${w.food1}. The princess was wearing her favourite ${w.cloth1} and ${w.vpast1} down the stairs to answer. "I shall grant you three wishes," said the creature, "but only if you bring me a golden ${w.noun1}!" The princess searched for ${w.num1} days and nights. She ${w.adv1} found it hidden inside a ${w.adj2} mushroom. "The magic word is ${w.silly1}!" she cried, and everyone lived happily — and rather strangely — ever after.`,
+      },
+      {
+        id: 7, title: 'The Sports Day', emoji: '🏅',
+        colour: '#f97316',
+        prompts: [
+          { type: 'adjective', key: 'adj1' }, { type: 'animal', key: 'animal1' },
+          { type: 'verb ending in ing', key: 'ving1' }, { type: 'food', key: 'food1' },
+          { type: 'number', key: 'num1' }, { type: 'noun', key: 'noun1' },
+          { type: 'adverb', key: 'adv1' }, { type: 'body_part', key: 'bp1' },
+          { type: 'verb past', key: 'vpast1' }, { type: 'name', key: 'name1' },
+        ],
+        template: (w) => `Sports Day this year was absolutely ${w.adj1}! The first event was the ${w.animal1} race, where everyone had to run while ${w.ving1}. For the egg and spoon race, we used ${w.food1} instead of eggs. I managed to balance ${w.num1} of them on my ${w.noun1}! The teachers' race was the funniest — they ${w.adv1} tripped over each other's ${w.bp1}s. In the final relay, our team ${w.vpast1} across the finish line and ${w.name1} accidentally ran straight into the bouncy castle. I won a medal for "Most Entertaining Athlete" and wore it to bed that night.`,
+      },
+      {
+        id: 8, title: 'My Dream Holiday', emoji: '✈️',
+        colour: '#06b6d4',
+        prompts: [
+          { type: 'place', key: 'place1' }, { type: 'adjective', key: 'adj1' },
+          { type: 'animal', key: 'animal1' }, { type: 'food', key: 'food1' },
+          { type: 'verb past', key: 'vpast1' }, { type: 'noun', key: 'noun1' },
+          { type: 'number', key: 'num1' }, { type: 'colour', key: 'col1' },
+          { type: 'adverb', key: 'adv1' }, { type: 'verb ending in ing', key: 'ving1' },
+          { type: 'exclamation', key: 'exc1' },
+        ],
+        template: (w) => `This summer, my family went on holiday to ${w.place1}. The hotel was ${w.adj1} and had a swimming pool shaped like a ${w.animal1}! Every morning, we ate ${w.food1} for breakfast, and then ${w.vpast1} on the beach all day. I found a ${w.noun1} buried in the sand, and it turned out to be ${w.num1} years old! The sea was ${w.col1} and full of friendly mermaids who ${w.adv1} waved at us. On the last day, we went ${w.ving1} in the mountains. "${w.exc1}" Dad kept shouting every time he saw a butterfly. Best holiday EVER — can we go back next week?`,
+      },
+      {
+        id: 9, title: 'The Talent Show', emoji: '🎤',
+        colour: '#ec4899',
+        prompts: [
+          { type: 'verb ending in ing', key: 'ving1' }, { type: 'noun', key: 'noun1' },
+          { type: 'adjective', key: 'adj1' }, { type: 'animal', key: 'animal1' },
+          { type: 'name', key: 'name1' }, { type: 'food', key: 'food1' },
+          { type: 'number', key: 'num1' }, { type: 'adverb', key: 'adv1' },
+          { type: 'body_part', key: 'bp1' }, { type: 'exclamation', key: 'exc1' },
+          { type: 'silly_word', key: 'silly1' },
+        ],
+        template: (w) => `I entered the school talent show and my act was ${w.ving1} while balancing a ${w.noun1} on my head! The audience looked ${w.adj1}. A trained ${w.animal1} went on before me, and ${w.name1} performed a dance made entirely of throwing ${w.food1} in the air. When it was my turn, I walked on stage in front of ${w.num1} people. I ${w.adv1} began my performance, but then I tripped over my own ${w.bp1}! "${w.exc1}" gasped the audience. I saved it by shouting "${w.silly1}!" and doing a bow. The judges gave me first place — for being the funniest act they had ever seen!`,
+      },
+      {
+        id: 10, title: 'The Secret Garden', emoji: '🌸',
+        colour: '#a3e635',
+        prompts: [
+          { type: 'adjective', key: 'adj1' }, { type: 'noun', key: 'noun1' },
+          { type: 'colour', key: 'col1' }, { type: 'animal', key: 'animal1' },
+          { type: 'food', key: 'food1' }, { type: 'verb past', key: 'vpast1' },
+          { type: 'number', key: 'num1' }, { type: 'name', key: 'name1' },
+          { type: 'adverb', key: 'adv1' }, { type: 'adjective', key: 'adj2' },
+          { type: 'silly_word', key: 'silly1' },
+        ],
+        template: (w) => `Behind the old ${w.adj1} wall, I found a secret garden! The gate was shaped like a ${w.noun1} and everything inside glowed ${w.col1}. Tiny ${w.animal1}s were the gardeners, and all the flowers smelled like ${w.food1}. A fairy ${w.vpast1} over to me and said the garden was ${w.num1} years old! She introduced herself as Queen ${w.name1} and ${w.adv1} invited me for a tea party. The cakes were ${w.adj2} and the teapot sang songs. The magic password to get back in was "${w.silly1}!" — I wrote it on my hand so I would never forget. I visit every day after school now.`,
+      },
+    ];
+
+    // ─── ENCOURAGING MESSAGES ─────────────────────────────────────
+    const ENCOURAGEMENTS = [
+      'Great word! 🌟', 'Love it! 💖', 'So creative! ✨', 'Amazing choice! 🎉',
+      'That\'s hilarious! 😂', 'Perfect! 💜', 'You\'re a word wizard! 🧙‍♀️',
+      'Brilliant! 🌈', 'This is going to be SO funny! 🤣', 'Ooh, good one! ⭐',
+    ];
+
+    // ─── MAIN APP ─────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState('home');
+      const [selectedStory, setSelectedStory] = useState(null);
+      const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+      const [answers, setAnswers] = useState({});
+      const [inputValue, setInputValue] = useState('');
+      const [stars, setStars] = useState(getStars());
+      const [encouragement, setEncouragement] = useState('');
+      const [shakeInput, setShakeInput] = useState(false);
+      const [speaking, setSpeaking] = useState(false);
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        if (screen === 'input' && inputRef.current) {
+          setTimeout(() => inputRef.current?.focus(), 300);
+        }
+      }, [screen, currentPromptIndex]);
+
+      const selectStory = (story) => {
+        sfx.click();
+        setSelectedStory(story);
+        setCurrentPromptIndex(0);
+        setAnswers({});
+        setInputValue('');
+        setScreen('input');
+      };
+
+      const submitWord = () => {
+        const trimmed = inputValue.trim();
+        if (!trimmed) {
+          setShakeInput(true);
+          setTimeout(() => setShakeInput(false), 400);
+          return;
+        }
+        sfx.submit();
+        const prompt = selectedStory.prompts[currentPromptIndex];
+        const newAnswers = { ...answers, [prompt.key]: trimmed };
+        setAnswers(newAnswers);
+        setInputValue('');
+        setEncouragement(ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]);
+
+        if (currentPromptIndex + 1 >= selectedStory.prompts.length) {
+          // All words collected
+          setTimeout(() => {
+            sfx.reveal();
+            spawnConfetti();
+            const newStars = addStars(3);
+            setStars(newStars);
+            setScreen('reveal');
+          }, 600);
+        } else {
+          setTimeout(() => {
+            setCurrentPromptIndex(currentPromptIndex + 1);
+            setEncouragement('');
+          }, 500);
+        }
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter') submitWord();
+      };
+
+      const speakStory = () => {
+        if (speaking) {
+          window.speechSynthesis.cancel();
+          setSpeaking(false);
+          return;
+        }
+        const text = selectedStory.template(answers);
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
+        utterance.onend = () => setSpeaking(false);
+        setSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const goHome = () => {
+        sfx.click();
+        window.speechSynthesis.cancel();
+        setSpeaking(false);
+        setScreen('home');
+        setSelectedStory(null);
+        setEncouragement('');
+      };
+
+      const getPartsOfSpeechScore = () => {
+        if (!selectedStory) return {};
+        const counts = {};
+        selectedStory.prompts.forEach(p => {
+          const label = WORD_HINTS[p.type]?.label || p.type;
+          counts[label] = (counts[label] || 0) + 1;
+        });
+        return counts;
+      };
+
+      // ─── RENDER: HOME ───────────────────────────────────────────
+      if (screen === 'home') {
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: 'linear-gradient(135deg, #fce4ec 0%, #e1bee7 30%, #ce93d8 60%, #f48fb1 100%)',
+            padding: '24px 16px 40px',
+            position: 'relative',
+          }}>
+            <a href="index.html" style={{
+              position: 'absolute', top: 16, left: 16, textDecoration: 'none',
+              fontSize: 28, zIndex: 10, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
+            }}>🏠</a>
+
+            <div style={{ textAlign: 'center', marginBottom: 24, paddingTop: 8 }}>
+              <div className="bounce-in" style={{ fontSize: 48, marginBottom: 8 }}>📝</div>
+              <h1 className="bounce-in" style={{
+                fontSize: 32, fontWeight: 800, color: '#fff',
+                textShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}>Mad Libs Fun!</h1>
+              <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, marginTop: 4 }}>
+                Pick a story, fill in silly words, and laugh!
+              </p>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,255,255,0.25)', borderRadius: 20,
+                padding: '6px 16px', marginTop: 12, backdropFilter: 'blur(8px)',
+              }}>
+                <span style={{ fontSize: 20 }}>⭐</span>
+                <span style={{ color: '#fff', fontWeight: 700, fontSize: 18 }}>{stars} stars</span>
+              </div>
+            </div>
+
+            <div style={{
+              maxWidth: 500, margin: '0 auto',
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: 12,
+            }}>
+              {STORIES.map((story, i) => (
+                <button key={story.id} className="fade-slide" onClick={() => selectStory(story)} style={{
+                  animationDelay: `${i * 0.06}s`,
+                  background: `linear-gradient(135deg, ${story.colour}dd, ${story.colour}88)`,
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderRadius: 16, padding: '16px 14px', cursor: 'pointer',
+                  textAlign: 'left', color: '#fff', transition: 'transform 0.2s, box-shadow 0.2s',
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>{story.emoji}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{story.title}</div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                    {story.prompts.length} words to fill in
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // ─── RENDER: INPUT ──────────────────────────────────────────
+      if (screen === 'input') {
+        const prompt = selectedStory.prompts[currentPromptIndex];
+        const info = WORD_HINTS[prompt.type] || { label: prompt.type.toUpperCase(), hint: '', examples: '' };
+        const progress = ((currentPromptIndex) / selectedStory.prompts.length) * 100;
+
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: `linear-gradient(135deg, ${selectedStory.colour}cc 0%, #7c3aed 50%, ${selectedStory.colour}88 100%)`,
+            padding: '24px 16px', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            {/* Top bar */}
+            <div style={{
+              position: 'absolute', top: 16, left: 16, right: 16,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <button onClick={goHome} style={{
+                background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 12,
+                padding: '8px 16px', color: '#fff', fontWeight: 600, cursor: 'pointer',
+                fontSize: 14,
+              }}>← Back</button>
+              <div style={{
+                background: 'rgba(255,255,255,0.2)', borderRadius: 12,
+                padding: '8px 16px', color: '#fff', fontWeight: 600, fontSize: 14,
+              }}>
+                {currentPromptIndex + 1} / {selectedStory.prompts.length}
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{
+              position: 'absolute', top: 60, left: 24, right: 24,
+              height: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 3,
+            }}>
+              <div style={{
+                height: '100%', background: '#fff', borderRadius: 3,
+                width: `${progress}%`, transition: 'width 0.4s ease',
+              }} />
+            </div>
+
+            <div style={{ textAlign: 'center', maxWidth: 450, width: '100%' }}>
+              <div className="bounce-in" style={{ fontSize: 40, marginBottom: 12 }}>
+                {selectedStory.emoji}
+              </div>
+              <h2 className="pop-in" style={{
+                fontSize: 20, color: 'rgba(255,255,255,0.8)', fontWeight: 500, marginBottom: 8,
+              }}>
+                {selectedStory.title}
+              </h2>
+
+              {encouragement && (
+                <div className="pop-in" style={{
+                  fontSize: 18, color: '#fef08a', fontWeight: 700, marginBottom: 12,
+                  minHeight: 28,
+                }}>{encouragement}</div>
+              )}
+              {!encouragement && <div style={{ minHeight: 28, marginBottom: 12 }} />}
+
+              <div className="bounce-in" style={{
+                background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)',
+                borderRadius: 20, padding: '24px 20px', marginBottom: 20,
+                border: '2px solid rgba(255,255,255,0.2)',
+              }}>
+                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 6 }}>
+                  Give me a...
+                </div>
+                <div style={{
+                  fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 10,
+                  textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                }}>
+                  {info.label}!
+                </div>
+                <div style={{
+                  fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 4,
+                  fontStyle: 'italic',
+                }}>
+                  {info.hint}
+                </div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                  e.g. {info.examples}
+                </div>
+              </div>
+
+              <div className={shakeInput ? 'shake' : ''} style={{ marginBottom: 16 }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Type a ${info.label.toLowerCase()}...`}
+                  style={{ maxWidth: 400 }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                />
+              </div>
+
+              <button onClick={submitWord} style={{
+                background: 'linear-gradient(135deg, #fff 0%, #f0f0ff 100%)',
+                color: selectedStory.colour, border: 'none', borderRadius: 16,
+                padding: '14px 40px', fontSize: 18, fontWeight: 800, cursor: 'pointer',
+                transition: 'transform 0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+              }}>
+                {currentPromptIndex + 1 >= selectedStory.prompts.length ? '✨ Finish Story!' : 'Next Word →'}
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // ─── RENDER: REVEAL ─────────────────────────────────────────
+      if (screen === 'reveal') {
+        const rawText = selectedStory.template(answers);
+        const partsScore = getPartsOfSpeechScore();
+        const wordsUsed = Object.values(answers);
+
+        // Build highlighted story
+        const buildHighlightedStory = () => {
+          let parts = [];
+          let remaining = rawText;
+          let keyIndex = 0;
+
+          // Replace each answer word with a highlighted span
+          const answerEntries = Object.entries(answers);
+          // Create a version with markers
+          let markedText = rawText;
+          const markers = [];
+          answerEntries.forEach(([key, val], idx) => {
+            const marker = `\u0000${idx}\u0000`;
+            markedText = markedText.replace(val, marker);
+            markers.push({ idx, val });
+          });
+
+          // Split by markers and build React elements
+          const segments = markedText.split(/\u0000(\d+)\u0000/);
+          return segments.map((seg, i) => {
+            if (i % 2 === 1) {
+              const mIdx = parseInt(seg);
+              const val = markers[mIdx].val;
+              return (
+                <span key={i} className="pop-in" style={{
+                  animationDelay: `${mIdx * 0.1}s`,
+                  background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                  color: '#fff', padding: '2px 8px', borderRadius: 8,
+                  fontWeight: 800, display: 'inline-block', margin: '2px 1px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                }}>{val}</span>
+              );
+            }
+            return <span key={i}>{seg}</span>;
+          });
+        };
+
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: `linear-gradient(135deg, #fce4ec 0%, ${selectedStory.colour}66 50%, #e1bee7 100%)`,
+            padding: '24px 16px 40px',
+          }}>
+            <div style={{ maxWidth: 550, margin: '0 auto' }}>
+              {/* Header */}
+              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                <div className="bounce-in" style={{ fontSize: 48, marginBottom: 8 }}>{selectedStory.emoji}</div>
+                <h2 className="bounce-in" style={{
+                  fontSize: 26, fontWeight: 800, color: '#7c3aed',
+                  textShadow: '0 1px 4px rgba(0,0,0,0.1)',
+                }}>{selectedStory.title}</h2>
+                <div className="fade-slide" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'linear-gradient(135deg, #fbbf24, #f97316)',
+                  borderRadius: 20, padding: '6px 16px', marginTop: 10,
+                  color: '#fff', fontWeight: 700, fontSize: 14,
+                }}>⭐ +3 stars!</div>
+              </div>
+
+              {/* Story card */}
+              <div className="fade-slide" style={{
+                background: '#fff', borderRadius: 20, padding: '24px 22px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
+                fontSize: 17, lineHeight: 1.8, color: '#1e293b',
+                marginBottom: 20,
+                border: '2px solid rgba(196, 132, 252, 0.3)',
+              }}>
+                {buildHighlightedStory()}
+              </div>
+
+              {/* Parts of Speech Score */}
+              <div className="fade-slide" style={{
+                animationDelay: '0.3s',
+                background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)',
+                borderRadius: 16, padding: '18px 20px', marginBottom: 20,
+                border: '2px solid rgba(196, 132, 252, 0.2)',
+              }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#7c3aed', marginBottom: 10, textAlign: 'center' }}>
+                  📚 Parts of Speech Score
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                  {Object.entries(partsScore).map(([label, count]) => (
+                    <div key={label} style={{
+                      background: 'linear-gradient(135deg, #e9d5ff, #fce7f3)',
+                      borderRadius: 10, padding: '6px 12px',
+                      fontSize: 13, fontWeight: 600, color: '#7c3aed',
+                    }}>
+                      {label} × {count}
+                    </div>
+                  ))}
+                </div>
+                <div style={{
+                  fontSize: 12, color: '#a78bfa', textAlign: 'center', marginTop: 8, fontStyle: 'italic',
+                }}>
+                  You used {selectedStory.prompts.length} different words across {Object.keys(partsScore).length} parts of speech!
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button onClick={speakStory} className="fade-slide" style={{
+                  animationDelay: '0.4s',
+                  background: speaking
+                    ? 'linear-gradient(135deg, #ef4444, #f97316)'
+                    : 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
+                  color: '#fff', border: 'none', borderRadius: 14,
+                  padding: '12px 24px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  transition: 'transform 0.2s',
+                }}>
+                  {speaking ? '⏹ Stop Reading' : '🔊 Read Aloud'}
+                </button>
+                <button onClick={goHome} className="fade-slide" style={{
+                  animationDelay: '0.5s',
+                  background: 'linear-gradient(135deg, #ec4899, #f472b6)',
+                  color: '#fff', border: 'none', borderRadius: 14,
+                  padding: '12px 24px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  transition: 'transform 0.2s',
+                }}>
+                  🎉 Make Another!
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

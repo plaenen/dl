@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shapes & Geometry!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    @keyframes foldLeft { 0%{transform:scaleX(1)}100%{transform:scaleX(-1)} }
+    @keyframes drawLine { 0%{stroke-dashoffset:200}100%{stroke-dashoffset:0} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Wow! 🚀",
+      "Perfect! 🎯","On fire! 🔥","Legend! 🏆","Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function randInt(min,max) { return Math.floor(Math.random()*(max-min+1))+min; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type==="correct") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.1); osc.frequency.setValueAtTime(784,ctx.currentTime+0.2); gain.gain.setValueAtTime(0,ctx.currentTime+0.35); osc.stop(ctx.currentTime+0.35); }
+        else if (type==="wrong") { osc.frequency.value=200; osc.type="sawtooth"; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.3); osc.stop(ctx.currentTime+0.3); }
+        else if (type==="levelup") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.15); osc.frequency.setValueAtTime(784,ctx.currentTime+0.3); osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45); gain.gain.setValueAtTime(0,ctx.currentTime+0.7); osc.stop(ctx.currentTime+0.7); }
+        else if (type==="click") { osc.frequency.value=800; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.06); osc.stop(ctx.currentTime+0.06); }
+      } catch(e) {}
+    }
+
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        setPieces(Array.from({length:25},(_,i) => ({ id:Date.now()+i, left:Math.random()*100, delay:Math.random()*0.5, emoji:randFrom(["🌟","⭐","🎉","🎊","✨","💖","📐","🔷"]) })));
+        const t = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(t);
+      }, [active]);
+      return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left:`${p.left}%`, animationDelay:`${p.delay}s` }}>{p.emoji}</div>)}</>;
+    }
+
+    function Btn({ children, onClick, color="#4f46e5", big, disabled, active, style:s }) {
+      return <button onClick={() => { if(!disabled){playSound("click");onClick?.();}}} disabled={disabled} style={{
+        padding: big?"16px 32px":"10px 20px", borderRadius:14,
+        border: active ? "3px solid #fff" : "3px solid transparent",
+        background: disabled?"#cbd5e1":color, color:"#fff", fontWeight:700,
+        fontSize: big?18:14, cursor: disabled?"default":"pointer",
+        boxShadow: disabled?"none":`0 4px 14px ${color}44`, transition:"all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function useStars() {
+      const [stars, setStars] = useState(() => parseInt(localStorage.getItem("shape_stars"))||0);
+      const add = useCallback((n) => setStars(s => { const v=s+n; localStorage.setItem("shape_stars",v); return v; }), []);
+      return [stars, add];
+    }
+
+    // ─── SHAPE DATA ──────────────────────────────────────────────
+    const SHAPES_2D = [
+      { name:"square", sides:4, vertices:4, regular:true, fact:"A square has 4 equal sides and 4 right angles!", symmetry:4 },
+      { name:"rectangle", sides:4, vertices:4, regular:false, fact:"A rectangle has 2 pairs of equal sides!", symmetry:2 },
+      { name:"triangle", sides:3, vertices:3, regular:false, fact:"The angles in a triangle always add up to 180°!", symmetry:1 },
+      { name:"circle", sides:0, vertices:0, regular:true, fact:"A circle has no corners and no straight sides!", symmetry:"infinite" },
+      { name:"pentagon", sides:5, vertices:5, regular:true, fact:"The Pentagon building in the USA is a pentagon shape!", symmetry:5 },
+      { name:"hexagon", sides:6, vertices:6, regular:true, fact:"Honeycomb cells are hexagons - bees are clever!", symmetry:6 },
+      { name:"octagon", sides:8, vertices:8, regular:true, fact:"A stop sign is an octagon!", symmetry:8 },
+      { name:"parallelogram", sides:4, vertices:4, regular:false, fact:"Opposite sides of a parallelogram are parallel!", symmetry:0 },
+      { name:"rhombus", sides:4, vertices:4, regular:false, fact:"A rhombus is like a tilted square - all sides equal!", symmetry:2 },
+      { name:"trapezium", sides:4, vertices:4, regular:false, fact:"A trapezium has exactly one pair of parallel sides!", symmetry:0 },
+    ];
+
+    const SHAPES_3D = [
+      { name:"cube", faces:6, edges:12, vertices:8, fact:"Dice are cubes - 6 square faces!" },
+      { name:"cuboid", faces:6, edges:12, vertices:8, fact:"A cereal box is a cuboid!" },
+      { name:"sphere", faces:1, edges:0, vertices:0, fact:"A football is a sphere - perfectly round!" },
+      { name:"cylinder", faces:3, edges:2, vertices:0, fact:"A tin of beans is a cylinder!" },
+      { name:"cone", faces:2, edges:1, vertices:1, fact:"An ice cream cone is a cone shape!" },
+      { name:"pyramid", faces:5, edges:8, vertices:5, fact:"The pyramids of Egypt are square-based pyramids!" },
+      { name:"prism", faces:5, edges:9, vertices:6, fact:"A Toblerone box is a triangular prism!" },
+    ];
+
+    const SHAPE_COLORS = ["#6366f1","#ec4899","#10b981","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#f97316"];
+
+    function getShapeColor() { return randFrom(SHAPE_COLORS); }
+
+    // ─── SVG SHAPE DRAWING ──────────────────────────────────────
+    function draw2DShape(name, size=120, color="#6366f1", showLabel=false) {
+      const s = size, h = s/2, cx=s/2, cy=s/2;
+      const r = h*0.85;
+      let path;
+      switch(name) {
+        case "square": {
+          const off = r*0.7;
+          path = <rect x={cx-off} y={cy-off} width={off*2} height={off*2} fill={color} opacity={0.2} stroke={color} strokeWidth={3} rx={2}/>;
+          break;
+        }
+        case "rectangle": {
+          const w=r*0.9, ht=r*0.55;
+          path = <rect x={cx-w} y={cy-ht} width={w*2} height={ht*2} fill={color} opacity={0.2} stroke={color} strokeWidth={3} rx={2}/>;
+          break;
+        }
+        case "triangle": {
+          const pts = `${cx},${cy-r*0.85} ${cx-r*0.8},${cy+r*0.7} ${cx+r*0.8},${cy+r*0.7}`;
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "circle":
+          path = <circle cx={cx} cy={cy} r={r*0.8} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        case "pentagon": {
+          const pts = Array.from({length:5},(_,i)=>{const a=Math.PI*2*i/5-Math.PI/2; return `${cx+r*0.8*Math.cos(a)},${cy+r*0.8*Math.sin(a)}`;}).join(" ");
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "hexagon": {
+          const pts = Array.from({length:6},(_,i)=>{const a=Math.PI*2*i/6-Math.PI/6; return `${cx+r*0.8*Math.cos(a)},${cy+r*0.8*Math.sin(a)}`;}).join(" ");
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "octagon": {
+          const pts = Array.from({length:8},(_,i)=>{const a=Math.PI*2*i/8-Math.PI/8; return `${cx+r*0.8*Math.cos(a)},${cy+r*0.8*Math.sin(a)}`;}).join(" ");
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "parallelogram": {
+          const w=r*0.85, ht=r*0.55, sk=r*0.3;
+          const pts = `${cx-w+sk},${cy-ht} ${cx+w+sk},${cy-ht} ${cx+w-sk},${cy+ht} ${cx-w-sk},${cy+ht}`;
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "rhombus": {
+          const w=r*0.6, ht=r*0.85;
+          const pts = `${cx},${cy-ht} ${cx+w},${cy} ${cx},${cy+ht} ${cx-w},${cy}`;
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        case "trapezium": {
+          const tw=r*0.5, bw=r*0.85, ht=r*0.6;
+          const pts = `${cx-tw},${cy-ht} ${cx+tw},${cy-ht} ${cx+bw},${cy+ht} ${cx-bw},${cy+ht}`;
+          path = <polygon points={pts} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+          break;
+        }
+        default: path = <circle cx={cx} cy={cy} r={r*0.8} fill={color} opacity={0.2} stroke={color} strokeWidth={3}/>;
+      }
+      return <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>{path}</svg>;
+    }
+
+    function draw3DShape(name, size=120, color="#6366f1") {
+      const s = size, cx=s/2, cy=s/2;
+      switch(name) {
+        case "cube": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <polygon points="30,40 60,25 90,40 90,80 60,95 30,80" fill={color} opacity={0.15} stroke={color} strokeWidth={2.5}/>
+          <polygon points="30,40 60,55 90,40" fill={color} opacity={0.1} stroke={color} strokeWidth={2}/>
+          <line x1="60" y1="55" x2="60" y2="95" stroke={color} strokeWidth={2}/>
+          <polygon points="30,40 60,55 60,95 30,80" fill={color} opacity={0.25}/>
+        </svg>;
+        case "cuboid": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <polygon points="20,35 55,22 100,35 100,85 55,98 20,85" fill={color} opacity={0.15} stroke={color} strokeWidth={2.5}/>
+          <polygon points="20,35 55,48 100,35" fill={color} opacity={0.1} stroke={color} strokeWidth={2}/>
+          <line x1="55" y1="48" x2="55" y2="98" stroke={color} strokeWidth={2}/>
+          <polygon points="20,35 55,48 55,98 20,85" fill={color} opacity={0.25}/>
+        </svg>;
+        case "sphere": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="42" fill={color} opacity={0.15} stroke={color} strokeWidth={2.5}/>
+          <ellipse cx="60" cy="60" rx="42" ry="14" fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="4,3"/>
+          <ellipse cx="60" cy="60" rx="14" ry="42" fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="4,3"/>
+          <circle cx="45" cy="45" r="8" fill="white" opacity={0.3}/>
+        </svg>;
+        case "cylinder": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <ellipse cx="60" cy="30" rx="35" ry="12" fill={color} opacity={0.2} stroke={color} strokeWidth={2.5}/>
+          <rect x="25" y="30" width="70" height="55" fill={color} opacity={0.12}/>
+          <line x1="25" y1="30" x2="25" y2="85" stroke={color} strokeWidth={2.5}/>
+          <line x1="95" y1="30" x2="95" y2="85" stroke={color} strokeWidth={2.5}/>
+          <ellipse cx="60" cy="85" rx="35" ry="12" fill={color} opacity={0.2} stroke={color} strokeWidth={2.5}/>
+        </svg>;
+        case "cone": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <polygon points="60,18 25,88 95,88" fill={color} opacity={0.15} stroke={color} strokeWidth={2.5}/>
+          <ellipse cx="60" cy="88" rx="35" ry="12" fill={color} opacity={0.2} stroke={color} strokeWidth={2.5}/>
+        </svg>;
+        case "pyramid": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <polygon points="60,15 20,85 70,98" fill={color} opacity={0.2} stroke={color} strokeWidth={2.5}/>
+          <polygon points="60,15 70,98 100,75" fill={color} opacity={0.3} stroke={color} strokeWidth={2.5}/>
+          <polygon points="20,85 70,98 100,75" fill={color} opacity={0.1} stroke={color} strokeWidth={2}/>
+        </svg>;
+        case "prism": return <svg width={s} height={s} viewBox="0 0 120 120">
+          <polygon points="35,25 60,15 85,25 85,90 60,100 35,90" fill={color} opacity={0.15} stroke={color} strokeWidth={2.5}/>
+          <polygon points="35,25 60,35 85,25" fill={color} opacity={0.1} stroke={color} strokeWidth={2}/>
+          <line x1="60" y1="35" x2="60" y2="100" stroke={color} strokeWidth={2}/>
+          <polygon points="35,25 60,35 60,100 35,90" fill={color} opacity={0.25}/>
+        </svg>;
+        default: return <svg width={s} height={s}><circle cx={cx} cy={cy} r="40" fill={color} opacity={0.2} stroke={color} strokeWidth={3}/></svg>;
+      }
+    }
+
+    // ─── GAME MODE 1: SHAPE SPOTTER ─────────────────────────────
+    function ShapeSpotter({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [showProps, setShowProps] = useState(false);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const totalRounds = 10;
+
+      const genQ = useCallback(() => {
+        const is3D = Math.random() > 0.5;
+        const pool = is3D ? SHAPES_3D : SHAPES_2D;
+        const shape = randFrom(pool);
+        const others = shuffle(pool.filter(s => s.name !== shape.name)).slice(0,3);
+        const options = shuffle([shape, ...others]);
+        const color = getShapeColor();
+        setQ({ shape, is3D, options, color });
+        setSelected(null);
+        setShowProps(false);
+        setMsg("");
+      }, []);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      const handleAnswer = (opt) => {
+        if (selected) return;
+        setSelected(opt.name);
+        if (opt.name === q.shape.name) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(1);
+          setConfetti(c => c + 1);
+          setShowProps(true);
+        } else {
+          playSound("wrong");
+          setMsg(randFrom(WRONG_MSGS) + ` It's a ${q.shape.name}!`);
+          setShowProps(true);
+        }
+      };
+
+      const next = () => {
+        if (round + 1 >= totalRounds) {
+          setQ(null);
+          return;
+        }
+        setRound(r => r + 1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) {
+          return <div style={{textAlign:"center",padding:32}}>
+            <Confetti active={confetti}/>
+            <div style={{fontSize:48}} className="bounce-in">🏆</div>
+            <h2 style={{color:"#fff",margin:"16px 0"}}>Round Complete!</h2>
+            <p style={{color:"#c7d2fe",fontSize:20,marginBottom:24}}>You got {score} out of {totalRounds} correct!</p>
+            <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+              <Btn onClick={() => {setRound(0);setScore(0);genQ();}} color="#10b981" big>Play Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1" big>Menu 🏠</Btn>
+            </div>
+          </div>;
+        }
+        return null;
+      }
+
+      return <div className="fade-slide" style={{maxWidth:500,margin:"0 auto",padding:16}}>
+        <Confetti active={confetti}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <Btn onClick={onBack} color="#6366f1">← Back</Btn>
+          <div style={{color:"#c7d2fe",fontWeight:700}}>⭐ {score}/{round+1} | Q{round+1}/{totalRounds}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:20,padding:24,textAlign:"center",marginBottom:16}}>
+          <p style={{color:"#c7d2fe",marginBottom:12,fontSize:16,fontWeight:600}}>What shape is this?</p>
+          <div className="bounce-in" style={{display:"inline-block"}}>
+            {q.is3D ? draw3DShape(q.shape.name, 160, q.color) : draw2DShape(q.shape.name, 160, q.color)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          {q.options.map((opt,i) => {
+            const isCorrect = opt.name === q.shape.name;
+            const isChosen = selected === opt.name;
+            let bg = "rgba(255,255,255,0.1)";
+            if (selected) {
+              if (isCorrect) bg = "#10b981";
+              else if (isChosen) bg = "#ef4444";
+            }
+            return <button key={opt.name} onClick={() => handleAnswer(opt)} className={isChosen && selected ? (isCorrect?"bounce-in":"shake") : "fade-slide"}
+              style={{animationDelay:`${i*0.05}s`,padding:"14px 8px",borderRadius:14,border:"2px solid "+(selected && isCorrect?"#10b981":"rgba(255,255,255,0.2)"),
+              background:bg,color:"#fff",fontWeight:700,fontSize:16,cursor:selected?"default":"pointer",textTransform:"capitalize",transition:"all 0.2s"}}>
+              {opt.name}
+            </button>;
+          })}
+        </div>
+        {msg && <div className="bounce-in" style={{textAlign:"center",color:"#fde68a",fontSize:18,fontWeight:700,marginBottom:8}}>{msg}</div>}
+        {showProps && <div className="fade-slide" style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:16}}>
+          <p style={{color:"#fde68a",fontWeight:700,marginBottom:8}}>📚 Shape Facts:</p>
+          {q.is3D ? <>
+            <p style={{color:"#e0e7ff"}}>Faces: {q.shape.faces} | Edges: {q.shape.edges} | Vertices: {q.shape.vertices}</p>
+          </> : <>
+            <p style={{color:"#e0e7ff"}}>Sides: {q.shape.sides} | Vertices: {q.shape.vertices} | Symmetry lines: {q.shape.symmetry === "infinite" ? "∞ (infinite!)" : q.shape.symmetry}</p>
+          </>}
+          <p style={{color:"#a5b4fc",marginTop:8,fontStyle:"italic"}}>{q.shape.fact}</p>
+        </div>}
+        {selected && <div style={{textAlign:"center"}}><Btn onClick={next} color="#10b981" big>{round+1>=totalRounds?"Finish 🏆":"Next →"}</Btn></div>}
+      </div>;
+    }
+
+    // ─── GAME MODE 2: PERIMETER QUEST ───────────────────────────
+    function PerimeterQuest({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [answer, setAnswer] = useState("");
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const totalRounds = 10;
+      const inputRef = useRef();
+
+      const genQ = useCallback(() => {
+        const level = Math.min(Math.floor(round/3), 2);
+        let sides, shapeName, correct, working, tip;
+        if (level === 0) {
+          // Square
+          const s = randInt(2,12);
+          sides = [s,s,s,s];
+          shapeName = "square";
+          correct = s*4;
+          working = `${s} + ${s} + ${s} + ${s} = ${correct}cm`;
+          tip = `Shortcut: 4 × ${s} = ${correct}cm`;
+        } else if (level === 1) {
+          // Rectangle
+          const l = randInt(3,15), w = randInt(2,10);
+          sides = [l,w,l,w];
+          shapeName = "rectangle";
+          correct = 2*(l+w);
+          working = `${l} + ${w} + ${l} + ${w} = ${correct}cm`;
+          tip = `Shortcut: 2 × (${l} + ${w}) = 2 × ${l+w} = ${correct}cm`;
+        } else {
+          // Irregular
+          const numSides = randInt(4,6);
+          sides = Array.from({length:numSides}, () => randInt(2,12));
+          shapeName = numSides + "-sided shape";
+          correct = sides.reduce((a,b) => a+b, 0);
+          working = sides.join(" + ") + ` = ${correct}cm`;
+          tip = "Add all the sides together!";
+        }
+        setQ({ sides, shapeName, correct, working, tip, color: getShapeColor() });
+        setAnswer("");
+        setResult(null);
+      }, [round]);
+
+      useEffect(() => { genQ(); }, [genQ]);
+      useEffect(() => { if(inputRef.current && !result) inputRef.current.focus(); }, [q, result]);
+
+      const check = () => {
+        const val = parseInt(answer);
+        if (isNaN(val)) return;
+        if (val === q.correct) {
+          playSound("correct");
+          setResult({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s=>s+1);
+          addStars(1);
+          setConfetti(c=>c+1);
+        } else {
+          playSound("wrong");
+          setResult({ correct:false, msg:randFrom(WRONG_MSGS) });
+        }
+      };
+
+      const next = () => {
+        if(round+1>=totalRounds) { setQ(null); return; }
+        setRound(r=>r+1);
+      };
+
+      function drawPerimeterShape(sides, color) {
+        const n = sides.length;
+        if (n === 4 && sides[0]===sides[2] && sides[1]===sides[3]) {
+          // Rectangle/square
+          const maxS = Math.max(...sides);
+          const scale = 180 / maxS;
+          const w = sides[0]*scale, h = sides[1]*scale;
+          const ox = (220-w)/2, oy = (180-h)/2+10;
+          return <svg width={220} height={200} viewBox="0 0 220 200">
+            <rect x={ox} y={oy} width={w} height={h} fill={color} opacity={0.15} stroke={color} strokeWidth={3} rx={2}/>
+            <text x={ox+w/2} y={oy-8} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={700}>{sides[0]}cm</text>
+            <text x={ox+w+12} y={oy+h/2+4} textAnchor="start" fill="#fff" fontSize={14} fontWeight={700}>{sides[1]}cm</text>
+            <text x={ox+w/2} y={oy+h+20} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={700}>{sides[2]}cm</text>
+            <text x={ox-12} y={oy+h/2+4} textAnchor="end" fill="#fff" fontSize={14} fontWeight={700}>{sides[3]}cm</text>
+          </svg>;
+        } else {
+          // Irregular polygon
+          const angles = Array.from({length:n},(_,i) => (Math.PI*2*i/n) - Math.PI/2);
+          const pts = angles.map((a,i) => ({ x:100+70*Math.cos(a), y:100+70*Math.sin(a) }));
+          const polyPts = pts.map(p=>`${p.x},${p.y}`).join(" ");
+          return <svg width={220} height={220} viewBox="0 0 220 220">
+            <polygon points={polyPts} fill={color} opacity={0.15} stroke={color} strokeWidth={3}/>
+            {sides.map((s,i) => {
+              const p1=pts[i], p2=pts[(i+1)%n];
+              const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+              const dx=p2.x-p1.x, dy=p2.y-p1.y;
+              const len=Math.sqrt(dx*dx+dy*dy);
+              const nx=-dy/len*16, ny=dx/len*16;
+              return <text key={i} x={mx+nx} y={my+ny+4} textAnchor="middle" fill="#fff" fontSize={13} fontWeight={700}>{s}cm</text>;
+            })}
+          </svg>;
+        }
+      }
+
+      if (!q) {
+        if (round > 0) {
+          return <div style={{textAlign:"center",padding:32}}>
+            <Confetti active={confetti}/>
+            <div style={{fontSize:48}} className="bounce-in">📐</div>
+            <h2 style={{color:"#fff",margin:"16px 0"}}>Perimeter Complete!</h2>
+            <p style={{color:"#c7d2fe",fontSize:20,marginBottom:24}}>Score: {score}/{totalRounds}</p>
+            <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+              <Btn onClick={()=>{setRound(0);setScore(0);genQ();}} color="#10b981" big>Play Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1" big>Menu 🏠</Btn>
+            </div>
+          </div>;
+        }
+        return null;
+      }
+
+      return <div className="fade-slide" style={{maxWidth:500,margin:"0 auto",padding:16}}>
+        <Confetti active={confetti}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <Btn onClick={onBack} color="#6366f1">← Back</Btn>
+          <div style={{color:"#c7d2fe",fontWeight:700}}>⭐ {score} | Q{round+1}/{totalRounds}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:20,padding:24,textAlign:"center",marginBottom:16}}>
+          <p style={{color:"#c7d2fe",marginBottom:8,fontSize:16,fontWeight:600}}>Find the perimeter of this {q.shapeName}:</p>
+          <div className="bounce-in">{drawPerimeterShape(q.sides, q.color)}</div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center",alignItems:"center",marginBottom:16}}>
+          <span style={{color:"#fff",fontSize:18,fontWeight:700}}>Perimeter =</span>
+          <input ref={inputRef} type="number" value={answer} onChange={e=>setAnswer(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")check();}}
+            disabled={result?.correct}
+            style={{width:80,padding:"10px 14px",borderRadius:12,border:"2px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:20,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <span style={{color:"#fff",fontSize:18,fontWeight:700}}>cm</span>
+          {!result?.correct && <Btn onClick={check} color="#10b981">Check ✓</Btn>}
+        </div>
+        {result && <div className={result.correct?"bounce-in":"shake"} style={{textAlign:"center",marginBottom:12}}>
+          <p style={{color:result.correct?"#86efac":"#fca5a5",fontSize:18,fontWeight:700}}>{result.msg}</p>
+        </div>}
+        {result?.correct && <div className="fade-slide" style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:16,textAlign:"center"}}>
+          <p style={{color:"#e0e7ff",fontSize:15}}>{q.working}</p>
+          <p style={{color:"#fde68a",fontSize:14,marginTop:6}}>💡 {q.tip}</p>
+        </div>}
+        {result?.correct && <div style={{textAlign:"center"}}><Btn onClick={next} color="#10b981" big>{round+1>=totalRounds?"Finish 🏆":"Next →"}</Btn></div>}
+      </div>;
+    }
+
+    // ─── GAME MODE 3: AREA ADVENTURE ────────────────────────────
+    function AreaAdventure({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [answer, setAnswer] = useState("");
+      const [result, setResult] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const [highlighted, setHighlighted] = useState(-1);
+      const totalRounds = 10;
+      const inputRef = useRef();
+
+      const genQ = useCallback(() => {
+        const level = Math.min(Math.floor(round/4), 1);
+        const l = randInt(2, level===0?6:10);
+        const w = randInt(2, level===0?5:8);
+        const area = l*w;
+        const showGrid = level === 0;
+        const color = getShapeColor();
+        setQ({ l, w, area, showGrid, color });
+        setAnswer("");
+        setResult(null);
+        setHighlighted(-1);
+      }, [round]);
+
+      useEffect(() => { genQ(); }, [genQ]);
+      useEffect(() => { if(inputRef.current && !result) inputRef.current.focus(); }, [q, result]);
+
+      const check = () => {
+        const val = parseInt(answer);
+        if (isNaN(val)) return;
+        if (val === q.area) {
+          playSound("correct");
+          setResult({ correct:true, msg:randFrom(ENCOURAGEMENTS) });
+          setScore(s=>s+1);
+          addStars(1);
+          setConfetti(c=>c+1);
+        } else {
+          playSound("wrong");
+          setResult({ correct:false, msg:randFrom(WRONG_MSGS) });
+        }
+      };
+
+      const next = () => {
+        if(round+1>=totalRounds) { setQ(null); return; }
+        setRound(r=>r+1);
+      };
+
+      function drawAreaGrid(l, w, color, showGrid, highlightRow) {
+        const cellSize = Math.min(36, 220/Math.max(l,w));
+        const gw=l*cellSize, gh=w*cellSize;
+        const ox=(260-gw)/2, oy=(220-gh)/2;
+        return <svg width={260} height={Math.max(220,gh+60)} viewBox={`0 0 260 ${Math.max(220,gh+60)}`}>
+          <rect x={ox} y={oy} width={gw} height={gh} fill={color} opacity={0.15} stroke={color} strokeWidth={2.5} rx={2}/>
+          {showGrid && Array.from({length:w},(_,r) =>
+            Array.from({length:l},(__,c) =>
+              <rect key={`${r}-${c}`} x={ox+c*cellSize} y={oy+r*cellSize} width={cellSize} height={cellSize}
+                fill={r===highlightRow?color:"none"} opacity={r===highlightRow?0.35:1}
+                stroke={color} strokeWidth={1} strokeOpacity={0.4}/>
+            )
+          )}
+          <text x={ox+gw/2} y={oy-10} textAnchor="middle" fill="#fff" fontSize={15} fontWeight={700}>{l}cm</text>
+          <text x={ox-10} y={oy+gh/2+5} textAnchor="end" fill="#fff" fontSize={15} fontWeight={700}>{w}cm</text>
+        </svg>;
+      }
+
+      if (!q) {
+        if (round > 0) {
+          return <div style={{textAlign:"center",padding:32}}>
+            <Confetti active={confetti}/>
+            <div style={{fontSize:48}} className="bounce-in">🟦</div>
+            <h2 style={{color:"#fff",margin:"16px 0"}}>Area Complete!</h2>
+            <p style={{color:"#c7d2fe",fontSize:20,marginBottom:24}}>Score: {score}/{totalRounds}</p>
+            <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+              <Btn onClick={()=>{setRound(0);setScore(0);genQ();}} color="#10b981" big>Play Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1" big>Menu 🏠</Btn>
+            </div>
+          </div>;
+        }
+        return null;
+      }
+
+      return <div className="fade-slide" style={{maxWidth:500,margin:"0 auto",padding:16}}>
+        <Confetti active={confetti}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <Btn onClick={onBack} color="#6366f1">← Back</Btn>
+          <div style={{color:"#c7d2fe",fontWeight:700}}>⭐ {score} | Q{round+1}/{totalRounds}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:20,padding:24,textAlign:"center",marginBottom:16}}>
+          <p style={{color:"#c7d2fe",marginBottom:8,fontSize:16,fontWeight:600}}>
+            {q.showGrid ? "Count the squares to find the area!" : "Calculate the area of this rectangle:"}
+          </p>
+          <div className="bounce-in">{drawAreaGrid(q.l, q.w, q.color, q.showGrid, highlighted)}</div>
+          {q.showGrid && <div style={{marginTop:8}}>
+            <span style={{color:"#a5b4fc",fontSize:13}}>Tap a row to highlight: </span>
+            {Array.from({length:q.w},(_,i) => <button key={i} onClick={()=>setHighlighted(i===highlighted?-1:i)}
+              style={{margin:2,width:28,height:28,borderRadius:8,border:"none",background:i===highlighted?q.color:"rgba(255,255,255,0.15)",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>{i+1}</button>)}
+          </div>}
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center",alignItems:"center",marginBottom:16}}>
+          <span style={{color:"#fff",fontSize:18,fontWeight:700}}>Area =</span>
+          <input ref={inputRef} type="number" value={answer} onChange={e=>setAnswer(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")check();}}
+            disabled={result?.correct}
+            style={{width:80,padding:"10px 14px",borderRadius:12,border:"2px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:20,fontWeight:700,textAlign:"center",outline:"none"}}/>
+          <span style={{color:"#fff",fontSize:16,fontWeight:700}}>cm²</span>
+          {!result?.correct && <Btn onClick={check} color="#10b981">Check ✓</Btn>}
+        </div>
+        {result && <div className={result.correct?"bounce-in":"shake"} style={{textAlign:"center",marginBottom:12}}>
+          <p style={{color:result.correct?"#86efac":"#fca5a5",fontSize:18,fontWeight:700}}>{result.msg}</p>
+        </div>}
+        {result?.correct && <div className="fade-slide" style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:16,textAlign:"center"}}>
+          <p style={{color:"#e0e7ff",fontSize:15}}>{q.w} rows of {q.l} = {q.w} × {q.l} = {q.area} square cm</p>
+          <p style={{color:"#fde68a",fontSize:14,marginTop:6}}>💡 Area = length × width</p>
+        </div>}
+        {result?.correct && <div style={{textAlign:"center"}}><Btn onClick={next} color="#10b981" big>{round+1>=totalRounds?"Finish 🏆":"Next →"}</Btn></div>}
+      </div>;
+    }
+
+    // ─── GAME MODE 4: ANGLE EXPLORER ────────────────────────────
+    const ANGLE_TYPES = [
+      { name:"acute", test:a=>a>0&&a<90, desc:"Less than 90°", emoji:"📏" },
+      { name:"right angle", test:a=>a===90, desc:"Exactly 90°", emoji:"📐" },
+      { name:"obtuse", test:a=>a>90&&a<180, desc:"Between 90° and 180°", emoji:"📏" },
+      { name:"straight", test:a=>a===180, desc:"Exactly 180°", emoji:"📏" },
+      { name:"reflex", test:a=>a>180&&a<360, desc:"Between 180° and 360°", emoji:"📏" },
+    ];
+
+    const ANGLE_FACTS = [
+      "A square has 4 right angles!",
+      "Clock hands at 3 o'clock make a right angle!",
+      "A pizza slice usually has an acute angle at the tip!",
+      "The corner of a book is a right angle!",
+      "An open door can make any kind of angle!",
+      "A straight angle looks like a straight line!",
+      "There are 360° in a full turn - like a spinning top!",
+    ];
+
+    function AngleExplorer({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const [msg, setMsg] = useState("");
+      const totalRounds = 10;
+
+      const genQ = useCallback(() => {
+        const mode = randInt(0,1);
+        if (mode === 0) {
+          // Identify angle type
+          const angles = [randInt(10,89), 90, randInt(91,170), 180];
+          const angle = randFrom(angles);
+          const type = ANGLE_TYPES.find(t => t.test(angle));
+          const options = shuffle(ANGLE_TYPES.filter(t => t.name !== "reflex").map(t => t.name));
+          setQ({ mode:0, angle, type, options, fact:randFrom(ANGLE_FACTS), color:getShapeColor() });
+        } else {
+          // How many right angles
+          const shapes = [
+            { name:"square", rightAngles:4 },
+            { name:"rectangle", rightAngles:4 },
+            { name:"triangle", rightAngles:0 },
+            { name:"pentagon", rightAngles:0 },
+            { name:"hexagon", rightAngles:0 },
+          ];
+          const shape = randFrom(shapes);
+          const options = shuffle([0,1,2,3,4].filter(n => {
+            if (n === shape.rightAngles) return true;
+            return Math.random() > 0.3;
+          }).slice(0,4));
+          if (!options.includes(shape.rightAngles)) options[randInt(0,options.length-1)] = shape.rightAngles;
+          setQ({ mode:1, shape, options, fact:randFrom(ANGLE_FACTS), color:getShapeColor() });
+        }
+        setSelected(null);
+        setMsg("");
+      }, []);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      function drawAngle(angle, color, size=160) {
+        const cx=size/2, cy=size*0.75;
+        const r = size*0.4;
+        const rad = angle * Math.PI / 180;
+        const x2 = cx + r * Math.cos(-rad);
+        const y2 = cy + r * Math.sin(-rad);
+        const arcR = r * 0.3;
+        const largeArc = angle > 180 ? 1 : 0;
+        const ax = cx + arcR * Math.cos(-rad);
+        const ay = cy + arcR * Math.sin(-rad);
+        return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <line x1={cx} y1={cy} x2={cx+r} y2={cy} stroke={color} strokeWidth={3} strokeLinecap="round"/>
+          <line x1={cx} y1={cy} x2={x2} y2={y2} stroke={color} strokeWidth={3} strokeLinecap="round"/>
+          <path d={`M ${cx+arcR} ${cy} A ${arcR} ${arcR} 0 ${largeArc} 0 ${ax} ${ay}`} fill="none" stroke="#fde68a" strokeWidth={2}/>
+          {angle===90 && <rect x={cx+6} y={cy-14} width={10} height={10} fill="none" stroke="#fde68a" strokeWidth={2}/>}
+          <text x={cx+arcR*1.5*Math.cos(-rad/2)} y={cy+arcR*1.5*Math.sin(-rad/2)+4} textAnchor="middle" fill="#fde68a" fontSize={14} fontWeight={700}>{angle}°</text>
+          <circle cx={cx} cy={cy} r={4} fill={color}/>
+        </svg>;
+      }
+
+      const handleAnswer = (opt) => {
+        if (selected !== null) return;
+        setSelected(opt);
+        const isCorrect = q.mode === 0 ? opt === q.type.name : opt === q.shape.rightAngles;
+        if (isCorrect) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s=>s+1);
+          addStars(1);
+          setConfetti(c=>c+1);
+        } else {
+          playSound("wrong");
+          const correctAnswer = q.mode === 0 ? q.type.name : q.shape.rightAngles;
+          setMsg(randFrom(WRONG_MSGS) + ` The answer is ${correctAnswer}${q.mode===1?" right angles":""}!`);
+        }
+      };
+
+      const next = () => {
+        if (round+1>=totalRounds) { setQ(null); return; }
+        setRound(r=>r+1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) {
+          return <div style={{textAlign:"center",padding:32}}>
+            <Confetti active={confetti}/>
+            <div style={{fontSize:48}} className="bounce-in">📐</div>
+            <h2 style={{color:"#fff",margin:"16px 0"}}>Angle Explorer Complete!</h2>
+            <p style={{color:"#c7d2fe",fontSize:20,marginBottom:24}}>Score: {score}/{totalRounds}</p>
+            <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+              <Btn onClick={()=>{setRound(0);setScore(0);genQ();}} color="#10b981" big>Play Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1" big>Menu 🏠</Btn>
+            </div>
+          </div>;
+        }
+        return null;
+      }
+
+      return <div className="fade-slide" style={{maxWidth:500,margin:"0 auto",padding:16}}>
+        <Confetti active={confetti}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <Btn onClick={onBack} color="#6366f1">← Back</Btn>
+          <div style={{color:"#c7d2fe",fontWeight:700}}>⭐ {score} | Q{round+1}/{totalRounds}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:20,padding:24,textAlign:"center",marginBottom:16}}>
+          {q.mode === 0 ? <>
+            <p style={{color:"#c7d2fe",marginBottom:12,fontSize:16,fontWeight:600}}>What type of angle is this?</p>
+            <div className="bounce-in">{drawAngle(q.angle, q.color)}</div>
+          </> : <>
+            <p style={{color:"#c7d2fe",marginBottom:12,fontSize:16,fontWeight:600}}>How many right angles does a {q.shape.name} have?</p>
+            <div className="bounce-in">{draw2DShape(q.shape.name, 140, q.color)}</div>
+          </>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:q.mode===0?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+          {q.options.map((opt,i) => {
+            const isCorrect = q.mode===0 ? opt===q.type.name : opt===q.shape.rightAngles;
+            const isChosen = selected === opt;
+            let bg = "rgba(255,255,255,0.1)";
+            if (selected !== null) {
+              if (isCorrect) bg = "#10b981";
+              else if (isChosen) bg = "#ef4444";
+            }
+            return <button key={i} onClick={() => handleAnswer(opt)}
+              className={isChosen && selected!==null ? (isCorrect?"bounce-in":"shake") : "fade-slide"}
+              style={{animationDelay:`${i*0.05}s`,padding:"12px 8px",borderRadius:14,
+                border:"2px solid "+(selected!==null&&isCorrect?"#10b981":"rgba(255,255,255,0.2)"),
+                background:bg,color:"#fff",fontWeight:700,fontSize:q.mode===0?15:20,cursor:selected!==null?"default":"pointer",textTransform:"capitalize",transition:"all 0.2s"}}>
+              {q.mode===0?opt:opt}
+            </button>;
+          })}
+        </div>
+        {msg && <div className="bounce-in" style={{textAlign:"center",color:"#fde68a",fontSize:18,fontWeight:700,marginBottom:8}}>{msg}</div>}
+        {selected!==null && <div className="fade-slide" style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:16,textAlign:"center"}}>
+          {q.mode===0 && <p style={{color:"#e0e7ff"}}>A {q.type.name} angle is {q.type.desc.toLowerCase()}</p>}
+          <p style={{color:"#a5b4fc",marginTop:6,fontStyle:"italic"}}>💡 {q.fact}</p>
+        </div>}
+        {selected!==null && <div style={{textAlign:"center"}}><Btn onClick={next} color="#10b981" big>{round+1>=totalRounds?"Finish 🏆":"Next →"}</Btn></div>}
+      </div>;
+    }
+
+    // ─── GAME MODE 5: SYMMETRY STUDIO ───────────────────────────
+    const SYMMETRY_ITEMS = [
+      { name:"square", lines:4, draw:(s,c)=>draw2DShape("square",s,c) },
+      { name:"rectangle", lines:2, draw:(s,c)=>draw2DShape("rectangle",s,c) },
+      { name:"equilateral triangle", lines:3, draw:(s,c)=>draw2DShape("triangle",s,c) },
+      { name:"circle", lines:"infinite", draw:(s,c)=>draw2DShape("circle",s,c) },
+      { name:"pentagon", lines:5, draw:(s,c)=>draw2DShape("pentagon",s,c) },
+      { name:"hexagon", lines:6, draw:(s,c)=>draw2DShape("hexagon",s,c) },
+      { name:"octagon", lines:8, draw:(s,c)=>draw2DShape("octagon",s,c) },
+      { name:"parallelogram", lines:0, draw:(s,c)=>draw2DShape("parallelogram",s,c) },
+      { name:"rhombus", lines:2, draw:(s,c)=>draw2DShape("rhombus",s,c) },
+      { name:"trapezium", lines:0, draw:(s,c)=>draw2DShape("trapezium",s,c) },
+      { name:"heart", lines:1, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <path d="M60,95 C20,65 10,40 30,25 C45,15 58,25 60,35 C62,25 75,15 90,25 C110,40 100,65 60,95Z" fill={c} opacity={0.2} stroke={c} strokeWidth={3}/>
+      </svg> },
+      { name:"butterfly", lines:1, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <ellipse cx="40" cy="45" rx="28" ry="22" fill={c} opacity={0.2} stroke={c} strokeWidth={2.5} transform="rotate(-20,40,45)"/>
+        <ellipse cx="80" cy="45" rx="28" ry="22" fill={c} opacity={0.2} stroke={c} strokeWidth={2.5} transform="rotate(20,80,45)"/>
+        <ellipse cx="42" cy="72" rx="18" ry="16" fill={c} opacity={0.2} stroke={c} strokeWidth={2.5} transform="rotate(-10,42,72)"/>
+        <ellipse cx="78" cy="72" rx="18" ry="16" fill={c} opacity={0.2} stroke={c} strokeWidth={2.5} transform="rotate(10,78,72)"/>
+        <line x1="60" y1="30" x2="60" y2="90" stroke={c} strokeWidth={3}/>
+      </svg> },
+      { name:"letter A", lines:1, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <text x="60" y="90" textAnchor="middle" fill={c} fontSize={80} fontWeight={700} fontFamily="sans-serif" opacity={0.7}>A</text>
+      </svg> },
+      { name:"letter B", lines:1, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <text x="60" y="90" textAnchor="middle" fill={c} fontSize={80} fontWeight={700} fontFamily="sans-serif" opacity={0.7}>B</text>
+      </svg> },
+      { name:"letter S", lines:0, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <text x="60" y="90" textAnchor="middle" fill={c} fontSize={80} fontWeight={700} fontFamily="sans-serif" opacity={0.7}>S</text>
+      </svg> },
+      { name:"letter X", lines:4, draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <text x="60" y="90" textAnchor="middle" fill={c} fontSize={80} fontWeight={700} fontFamily="sans-serif" opacity={0.7}>X</text>
+      </svg> },
+      { name:"letter O", lines:"infinite", draw:(s,c)=><svg width={s} height={s} viewBox="0 0 120 120">
+        <text x="60" y="90" textAnchor="middle" fill={c} fontSize={80} fontWeight={700} fontFamily="sans-serif" opacity={0.7}>O</text>
+      </svg> },
+    ];
+
+    function SymmetryStudio({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [confetti, setConfetti] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [showFold, setShowFold] = useState(false);
+      const totalRounds = 10;
+
+      const genQ = useCallback(() => {
+        const item = randFrom(SYMMETRY_ITEMS);
+        const correctVal = item.lines === "infinite" ? "∞" : item.lines;
+        const possibleAnswers = [0,1,2,3,4,5,6,8,"∞"];
+        let options = [correctVal];
+        const distractors = shuffle(possibleAnswers.filter(v => v !== correctVal));
+        options = shuffle([...options, ...distractors.slice(0,3)]);
+        setQ({ item, correctVal, options, color:getShapeColor() });
+        setSelected(null);
+        setMsg("");
+        setShowFold(false);
+      }, []);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      const handleAnswer = (opt) => {
+        if (selected !== null) return;
+        setSelected(opt);
+        if (opt === q.correctVal) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s=>s+1);
+          addStars(1);
+          setConfetti(c=>c+1);
+          setShowFold(true);
+        } else {
+          playSound("wrong");
+          setMsg(randFrom(WRONG_MSGS) + ` It has ${q.correctVal === "∞" ? "infinite" : q.correctVal} line${q.correctVal===1?"":"s"} of symmetry!`);
+          setShowFold(true);
+        }
+      };
+
+      const next = () => {
+        if(round+1>=totalRounds) { setQ(null); return; }
+        setRound(r=>r+1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) {
+          return <div style={{textAlign:"center",padding:32}}>
+            <Confetti active={confetti}/>
+            <div style={{fontSize:48}} className="bounce-in">🦋</div>
+            <h2 style={{color:"#fff",margin:"16px 0"}}>Symmetry Complete!</h2>
+            <p style={{color:"#c7d2fe",fontSize:20,marginBottom:24}}>Score: {score}/{totalRounds}</p>
+            <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+              <Btn onClick={()=>{setRound(0);setScore(0);genQ();}} color="#10b981" big>Play Again 🔄</Btn>
+              <Btn onClick={onBack} color="#6366f1" big>Menu 🏠</Btn>
+            </div>
+          </div>;
+        }
+        return null;
+      }
+
+      function drawSymmetryLines(item, color) {
+        if (item.lines === 0 || item.lines === "infinite") return null;
+        const s = 150, cx=s/2, cy=s/2, r=s*0.45;
+        const lines = [];
+        const n = typeof item.lines === "number" ? item.lines : 0;
+        for (let i = 0; i < Math.min(n, 8); i++) {
+          const angle = (Math.PI * i) / n;
+          lines.push(
+            <line key={i} x1={cx-r*Math.cos(angle)} y1={cy-r*Math.sin(angle)}
+              x2={cx+r*Math.cos(angle)} y2={cy+r*Math.sin(angle)}
+              stroke="#fde68a" strokeWidth={2} strokeDasharray="6,4" opacity={0.8}/>
+          );
+        }
+        return <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{position:"absolute",top:0,left:0}}>{lines}</svg>;
+      }
+
+      return <div className="fade-slide" style={{maxWidth:500,margin:"0 auto",padding:16}}>
+        <Confetti active={confetti}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <Btn onClick={onBack} color="#6366f1">← Back</Btn>
+          <div style={{color:"#c7d2fe",fontWeight:700}}>⭐ {score} | Q{round+1}/{totalRounds}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:20,padding:24,textAlign:"center",marginBottom:16}}>
+          <p style={{color:"#c7d2fe",marginBottom:12,fontSize:16,fontWeight:600}}>How many lines of symmetry does this {q.item.name} have?</p>
+          <div className="bounce-in" style={{display:"inline-block",position:"relative"}}>
+            {q.item.draw(150, q.color)}
+            {showFold && drawSymmetryLines(q.item, q.color)}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+          {q.options.map((opt,i) => {
+            const isCorrect = opt === q.correctVal;
+            const isChosen = selected === opt;
+            let bg = "rgba(255,255,255,0.1)";
+            if (selected !== null) {
+              if (isCorrect) bg = "#10b981";
+              else if (isChosen) bg = "#ef4444";
+            }
+            return <button key={i} onClick={() => handleAnswer(opt)}
+              className={isChosen && selected!==null ? (isCorrect?"bounce-in":"shake") : "fade-slide"}
+              style={{animationDelay:`${i*0.05}s`,padding:"14px 8px",borderRadius:14,
+                border:"2px solid "+(selected!==null&&isCorrect?"#10b981":"rgba(255,255,255,0.2)"),
+                background:bg,color:"#fff",fontWeight:700,fontSize:20,cursor:selected!==null?"default":"pointer",transition:"all 0.2s"}}>
+              {opt === "∞" ? "∞" : opt}
+            </button>;
+          })}
+        </div>
+        {msg && <div className="bounce-in" style={{textAlign:"center",color:"#fde68a",fontSize:18,fontWeight:700,marginBottom:8}}>{msg}</div>}
+        {showFold && <div className="fade-slide" style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:16,marginBottom:16,textAlign:"center"}}>
+          <p style={{color:"#e0e7ff"}}>
+            {q.correctVal === "∞" ? "This shape has infinite lines of symmetry - you can fold it along any line through the centre!" :
+             q.correctVal === 0 ? "This shape has no lines of symmetry - you can't fold it to match!" :
+             `This shape has ${q.correctVal} line${q.correctVal===1?"":"s"} of symmetry!`}
+          </p>
+          <p style={{color:"#a5b4fc",marginTop:6,fontStyle:"italic"}}>💡 A line of symmetry divides a shape into two matching halves - like folding it in half!</p>
+        </div>}
+        {selected!==null && <div style={{textAlign:"center"}}><Btn onClick={next} color="#10b981" big>{round+1>=totalRounds?"Finish 🏆":"Next →"}</Btn></div>}
+      </div>;
+    }
+
+    // ─── MAIN APP ───────────────────────────────────────────────
+    const MODES = [
+      { id:"spotter", name:"Shape Spotter", emoji:"🔍", desc:"Identify 2D and 3D shapes", color:"#6366f1" },
+      { id:"perimeter", name:"Perimeter Quest", emoji:"📐", desc:"Add up all the sides!", color:"#ec4899" },
+      { id:"area", name:"Area Adventure", emoji:"🟦", desc:"Count squares and calculate area", color:"#10b981" },
+      { id:"angles", name:"Angle Explorer", emoji:"📏", desc:"Learn about different angles", color:"#f59e0b" },
+      { id:"symmetry", name:"Symmetry Studio", emoji:"🦋", desc:"Find lines of symmetry", color:"#8b5cf6" },
+    ];
+
+    function App() {
+      const [mode, setMode] = useState(null);
+      const [stars, addStars] = useStars();
+
+      const goHome = () => setMode(null);
+
+      if (mode === "spotter") return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px"}}><ShapeSpotter onBack={goHome} addStars={addStars}/></div>;
+      if (mode === "perimeter") return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px"}}><PerimeterQuest onBack={goHome} addStars={addStars}/></div>;
+      if (mode === "area") return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px"}}><AreaAdventure onBack={goHome} addStars={addStars}/></div>;
+      if (mode === "angles") return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px"}}><AngleExplorer onBack={goHome} addStars={addStars}/></div>;
+      if (mode === "symmetry") return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px"}}><SymmetryStudio onBack={goHome} addStars={addStars}/></div>;
+
+      return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%)",padding:"20px 8px",position:"relative"}}>
+        <a href="index.html" style={{position:"absolute",top:16,left:16,fontSize:28,textDecoration:"none",zIndex:10}} title="Home">🏠</a>
+        <div style={{maxWidth:500,margin:"0 auto",textAlign:"center",paddingTop:32}}>
+          <div className="float" style={{fontSize:56,marginBottom:8}}>📐</div>
+          <h1 className="bounce-in" style={{color:"#fff",fontSize:32,fontWeight:800,marginBottom:4}}>Shapes & Geometry!</h1>
+          <p style={{color:"#c7d2fe",fontSize:16,marginBottom:8}}>Explore shapes, angles, and symmetry!</p>
+          <div className="pulse" style={{display:"inline-block",background:"rgba(255,255,255,0.12)",borderRadius:14,padding:"8px 20px",marginBottom:28}}>
+            <span style={{color:"#fde68a",fontSize:20,fontWeight:700}}>⭐ {stars} stars</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {MODES.map((m,i) => <button key={m.id} onClick={() => {playSound("click");setMode(m.id);}}
+              className="fade-slide" style={{animationDelay:`${i*0.08}s`,display:"flex",alignItems:"center",gap:16,
+                padding:"18px 20px",borderRadius:18,border:"2px solid rgba(255,255,255,0.15)",
+                background:"rgba(255,255,255,0.08)",color:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.2s",
+                backdropFilter:"blur(8px)"}}>
+              <div style={{fontSize:36,width:52,height:52,display:"flex",alignItems:"center",justifyContent:"center",
+                background:m.color+"22",borderRadius:14}}>{m.emoji}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:17}}>{m.name}</div>
+                <div style={{color:"#a5b4fc",fontSize:13}}>{m.desc}</div>
+              </div>
+            </button>)}
+          </div>
+        </div>
+      </div>;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
