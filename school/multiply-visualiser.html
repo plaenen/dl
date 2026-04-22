@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>See the Maths! - Multiply & Divide</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes popIn { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    @keyframes fadeSlide { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+    @keyframes glow { 0%,100% { box-shadow: 0 0 8px rgba(251,191,36,0.3); } 50% { box-shadow: 0 0 20px rgba(251,191,36,0.6); } }
+    .pop-in { animation: popIn 0.3s ease-out both; }
+    .fade-slide { animation: fadeSlide 0.4s ease-out both; }
+    .wiggle { animation: wiggle 0.6s ease-in-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ─── SHARED ─────────────────────────────────────────────────────
+    const COLORS = ["#3b82f6","#ef4444","#10b981","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#f97316","#6366f1","#14b8a6"];
+    const FRUIT = ["🍎","🍊","🍋","🍐","🫐","🍇","🍓","🍒","🥝","🍑"];
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type === "pop") { osc.frequency.value = 600 + Math.random()*400; osc.start(); gain.gain.setValueAtTime(0, ctx.currentTime+0.08); osc.stop(ctx.currentTime+0.08); }
+        else if (type === "ding") { osc.frequency.value = 523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.1); osc.frequency.setValueAtTime(784,ctx.currentTime+0.2); gain.gain.setValueAtTime(0,ctx.currentTime+0.35); osc.stop(ctx.currentTime+0.35); }
+        else if (type === "click") { osc.frequency.value = 800; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.06); osc.stop(ctx.currentTime+0.06); }
+      } catch(e) {}
+    }
+
+    function Btn({ children, onClick, color="#3b82f6", active, small, style:s }) {
+      return <button onClick={() => { playSound("click"); onClick?.(); }} style={{
+        padding: small ? "8px 14px" : "12px 20px", borderRadius: 12, border: active ? "3px solid #fff" : "3px solid transparent",
+        background: color, color: "#fff", fontWeight: 700, fontSize: small ? 13 : 15,
+        cursor: "pointer", boxShadow: `0 3px 12px ${color}44`, transition: "all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function BackBar({ onBack, title }) {
+      return <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", marginBottom:12 }}>
+        <button onClick={() => { playSound("click"); onBack(); }} style={{
+          width:36, height:36, borderRadius:10, border:"none", background:"rgba(255,255,255,0.15)",
+          color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+        }}>{"←"}</button>
+        <span style={{ fontWeight:700, fontSize:18, color:"#fff" }}>{title}</span>
+      </div>;
+    }
+
+    function NumPicker({ label, value, onChange, min=1, max=12, color="#3b82f6" }) {
+      return <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <span style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.7)", minWidth:40 }}>{label}</span>
+        <button onClick={() => { if(value>min) { playSound("click"); onChange(value-1); }}}
+          style={{ width:36, height:36, borderRadius:10, border:"none", background:"rgba(255,255,255,0.15)",
+          color:"#fff", fontSize:18, cursor:"pointer", fontWeight:800 }}>{"−"}</button>
+        <div style={{ width:48, textAlign:"center", fontSize:28, fontWeight:800, color:"#fff" }}>{value}</div>
+        <button onClick={() => { if(value<max) { playSound("click"); onChange(value+1); }}}
+          style={{ width:36, height:36, borderRadius:10, border:"none", background:"rgba(255,255,255,0.15)",
+          color:"#fff", fontSize:18, cursor:"pointer", fontWeight:800 }}>{"+"}</button>
+      </div>;
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    function Home({ onNav }) {
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4f46e5 100%)", padding:"30px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ fontSize:56, marginBottom:12 }}>{"🔍"}</div>
+          <h1 style={{ fontSize:30, fontWeight:800, marginBottom:4 }}>See the Maths!</h1>
+          <p style={{ fontSize:15, opacity:0.8, marginBottom:32 }}>Multiply & divide — made visible</p>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, textAlign:"left" }}>
+            <ModeBtn emoji="🟦" title="Rectangle Builder" desc="SEE that 3×4 is a rectangle — rotate it and it's 4×3!"
+              color="#3b82f6" onClick={() => onNav("rect")} />
+            <ModeBtn emoji="👨‍👩‍👧‍👦" title="Fact Families" desc="Every multiplication gives you 2 divisions for FREE!"
+              color="#10b981" onClick={() => onNav("family")} />
+            <ModeBtn emoji="🍎" title="Division = Sharing" desc="See division as sharing fruit into bags — two ways to think about it!"
+              color="#ef4444" onClick={() => onNav("divide")} />
+            <ModeBtn emoji="✂️" title="Break It Apart" desc="7×6 is hard? Split it into 5×6 + 2×6. Easy!"
+              color="#f59e0b" onClick={() => onNav("split")} />
+            <ModeBtn emoji="🔗" title="Doubling Chain" desc="Know 2×6? Double it → 4×6. Double again → 8×6!"
+              color="#8b5cf6" onClick={() => onNav("chain")} />
+          </div>
+        </div>
+      </div>;
+    }
+
+    function ModeBtn({ emoji, title, desc, color, onClick }) {
+      return <button onClick={() => { playSound("click"); onClick(); }} style={{
+        display:"flex", alignItems:"center", gap:14, padding:"16px 18px", borderRadius:16,
+        border:"2px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.07)",
+        color:"#fff", cursor:"pointer", textAlign:"left", transition:"all 0.2s",
+      }}>
+        <div style={{ width:50, height:50, borderRadius:14, background:color, display:"flex",
+          alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>{emoji}</div>
+        <div>
+          <div style={{ fontWeight:700, fontSize:16, marginBottom:2 }}>{title}</div>
+          <div style={{ fontSize:12, opacity:0.7 }}>{desc}</div>
+        </div>
+      </button>;
+    }
+
+    // ─── RECTANGLE BUILDER ──────────────────────────────────────────
+    function RectBuilder({ onBack }) {
+      const [rows, setRows] = useState(3);
+      const [cols, setCols] = useState(4);
+      const [rotated, setRotated] = useState(false);
+      const [showArea, setShowArea] = useState(false);
+
+      const r = rotated ? cols : rows;
+      const c = rotated ? rows : cols;
+      const total = rows * cols;
+      const cellSize = Math.min(36, Math.floor(280 / Math.max(r, c)));
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1e3a5f 0%, #1e40af 50%, #3b82f6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Rectangle Builder" />
+
+          <div style={{ display:"flex", gap:16, justifyContent:"center", marginBottom:20 }}>
+            <NumPicker label="Rows" value={rows} onChange={setRows} max={10} />
+            <NumPicker label="Cols" value={cols} onChange={setCols} max={10} />
+          </div>
+
+          {/* The equation */}
+          <div className="fade-slide" style={{ textAlign:"center", marginBottom:16 }}>
+            <div style={{ fontSize:32, fontWeight:800 }}>
+              <span style={{ color:"#93c5fd" }}>{r}</span>
+              {" × "}
+              <span style={{ color:"#fbbf24" }}>{c}</span>
+              {" = "}
+              <span style={{ color:"#4ade80" }}>{total}</span>
+            </div>
+            <div style={{ fontSize:14, opacity:0.7, marginTop:4 }}>
+              {r} rows of {c} = {total} squares
+            </div>
+          </div>
+
+          {/* Grid */}
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}>
+            <div style={{
+              display:"grid",
+              gridTemplateColumns: `repeat(${c}, ${cellSize}px)`,
+              gap: 3,
+              padding: 12,
+              background: "rgba(255,255,255,0.08)",
+              borderRadius: 16,
+              transition: "all 0.4s",
+            }}>
+              {Array.from({ length: total }, (_, i) => {
+                const row = Math.floor(i / c);
+                const col = i % c;
+                return <div key={i} className="pop-in" style={{
+                  width: cellSize, height: cellSize, borderRadius: 6,
+                  background: showArea ? "#4ade80" : (row % 2 === 0 ? "#93c5fd" : "#60a5fa"),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: cellSize > 24 ? 11 : 8, fontWeight: 700, color: "rgba(0,0,0,0.4)",
+                  animationDelay: `${i * 15}ms`,
+                  transition: "background 0.3s",
+                }}>
+                  {showArea ? i + 1 : ""}
+                </div>;
+              })}
+            </div>
+          </div>
+
+          {/* Row labels */}
+          <div style={{ textAlign:"center", fontSize:13, opacity:0.7, marginBottom:16 }}>
+            {"→"} {r} rows, each with {c} squares
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap", marginBottom:20 }}>
+            <Btn onClick={() => { playSound("ding"); setRotated(!rotated); }} color="#f59e0b">
+              {"🔄"} Rotate! ({rotated ? rows : cols}×{rotated ? cols : rows})
+            </Btn>
+            <Btn onClick={() => setShowArea(!showArea)} color={showArea ? "#4ade80" : "#6366f1"}>
+              {showArea ? "🔢 Hide" : "🔢 Count"} Area
+            </Btn>
+          </div>
+
+          {/* Insight cards */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"💡"} Why rotation works</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              When you rotate the rectangle, you still have the <strong>same number of squares</strong>!<br/>
+              <span style={{ color:"#93c5fd" }}>{rows}</span> × <span style={{ color:"#fbbf24" }}>{cols}</span> = <span style={{ color:"#fbbf24" }}>{cols}</span> × <span style={{ color:"#93c5fd" }}>{rows}</span> = <span style={{ color:"#4ade80" }}>{total}</span><br/><br/>
+              This is why <strong>you can always swap</strong> the numbers! The rectangle is the same, just turned sideways.
+            </div>
+          </div>
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"📐"} Multiplication = Area</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              Whenever you multiply two numbers, you're really finding the <strong>area of a rectangle</strong>!<br/>
+              A room that is {rows}m × {cols}m = <strong>{total} square metres</strong>. That's what multiplication <em>means</em>.
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── FACT FAMILIES ──────────────────────────────────────────────
+    function FactFamily({ onBack }) {
+      const [a, setA] = useState(3);
+      const [b, setB] = useState(4);
+      const [revealStep, setRevealStep] = useState(0);
+      const product = a * b;
+
+      const reset = () => setRevealStep(0);
+      useEffect(reset, [a, b]);
+
+      const facts = [
+        { eq: `${a} × ${b} = ${product}`, desc: `${a} groups of ${b}`, type: "mul", color: "#3b82f6" },
+        { eq: `${b} × ${a} = ${product}`, desc: `${b} groups of ${a} (swap!)`, type: "mul", color: "#6366f1" },
+        { eq: `${product} ÷ ${a} = ${b}`, desc: `${product} shared into ${a} groups = ${b} each`, type: "div", color: "#ef4444" },
+        { eq: `${product} ÷ ${b} = ${a}`, desc: `${product} shared into ${b} groups = ${a} each`, type: "div", color: "#f97316" },
+      ];
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Fact Families" />
+
+          <div style={{ display:"flex", gap:16, justifyContent:"center", marginBottom:20 }}>
+            <NumPicker label="" value={a} onChange={setA} max={12} />
+            <div style={{ fontSize:28, fontWeight:800, alignSelf:"center" }}>{"×"}</div>
+            <NumPicker label="" value={b} onChange={setB} max={12} />
+          </div>
+
+          {/* Triangle */}
+          <div style={{ textAlign:"center", marginBottom:20, position:"relative" }}>
+            <svg width="220" height="180" viewBox="0 0 220 180" style={{ margin:"0 auto", display:"block" }}>
+              <line x1="110" y1="25" x2="30" y2="155" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeDasharray="6,4" />
+              <line x1="110" y1="25" x2="190" y2="155" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeDasharray="6,4" />
+              <line x1="30" y1="155" x2="190" y2="155" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeDasharray="6,4" />
+              {/* Product on top */}
+              <circle cx="110" cy="25" r="28" fill="#4ade80" />
+              <text x="110" y="31" textAnchor="middle" fill="#064e3b" fontSize="18" fontWeight="800">{product}</text>
+              {/* Factor left */}
+              <circle cx="30" cy="155" r="28" fill="#93c5fd" />
+              <text x="30" y="161" textAnchor="middle" fill="#1e3a5f" fontSize="18" fontWeight="800">{a}</text>
+              {/* Factor right */}
+              <circle cx="190" cy="155" r="28" fill="#fbbf24" />
+              <text x="190" y="161" textAnchor="middle" fill="#78350f" fontSize="18" fontWeight="800">{b}</text>
+              {/* Labels */}
+              <text x="110" y="175" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11">× multiply across, ÷ divide down</text>
+            </svg>
+          </div>
+
+          {/* Reveal facts one by one */}
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+            {facts.map((f, i) => {
+              const visible = i < revealStep;
+              return <div key={i} className={visible ? "fade-slide" : ""} style={{
+                background: visible ? f.color : "rgba(255,255,255,0.06)",
+                borderRadius: 14, padding: "14px 18px",
+                opacity: visible ? 1 : 0.3, transition: "all 0.3s",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ fontWeight:800, fontSize:20 }}>{visible ? f.eq : "? ? ? = ?"}</div>
+                  {visible && <div style={{ fontSize:12, opacity:0.8, marginTop:2 }}>{f.desc}</div>}
+                </div>
+                <div style={{ fontSize:12, fontWeight:600, opacity:0.7, background:"rgba(255,255,255,0.15)", padding:"4px 10px", borderRadius:8 }}>
+                  {f.type === "mul" ? "×" : "÷"}
+                </div>
+              </div>;
+            })}
+          </div>
+
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            {revealStep < 4 ? (
+              <Btn onClick={() => { playSound("ding"); setRevealStep(s => s + 1); }} color="#fff" style={{ color:"#064e3b" }}>
+                {"✨"} Reveal next fact! ({revealStep}/4)
+              </Btn>
+            ) : (
+              <Btn onClick={reset} color="#4ade80">{"🔄"} Reset</Btn>
+            )}
+          </div>
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🧠"} The big secret</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              Every multiplication fact is actually <strong>4 facts in one</strong>!<br/><br/>
+              If you know that {a} × {b} = {product}, you <em>automatically</em> know:<br/>
+              • {b} × {a} = {product} (swap!)<br/>
+              • {product} ÷ {a} = {b} (undo it!)<br/>
+              • {product} ÷ {b} = {a} (undo the other way!)<br/><br/>
+              <strong>Division is just multiplication running backwards.</strong> Like pressing rewind!
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── DIVISION VISUALISER ────────────────────────────────────────
+    function DivisionVis({ onBack }) {
+      const [total, setTotal] = useState(12);
+      const [divisor, setDivisor] = useState(3);
+      const [mode, setMode] = useState("share"); // "share" or "group"
+      const [animated, setAnimated] = useState(false);
+
+      const canDivide = total % divisor === 0;
+      const result = canDivide ? total / divisor : 0;
+      const remainder = total % divisor;
+      const fruit = FRUIT[divisor % FRUIT.length];
+
+      useEffect(() => { setAnimated(false); setTimeout(() => setAnimated(true), 50); }, [total, divisor, mode]);
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #ef4444 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Division = Sharing" />
+
+          <div style={{ display:"flex", gap:16, justifyContent:"center", marginBottom:12 }}>
+            <NumPicker label="Total" value={total} onChange={setTotal} min={2} max={100} />
+            <div style={{ fontSize:28, fontWeight:800, alignSelf:"center" }}>{"÷"}</div>
+            <NumPicker label="By" value={divisor} onChange={setDivisor} min={2} max={12} />
+          </div>
+
+          {/* Equation */}
+          <div style={{ textAlign:"center", marginBottom:12 }}>
+            <div style={{ fontSize:28, fontWeight:800 }}>
+              {total} ÷ {divisor} = {canDivide ? result : <>{Math.floor(total/divisor)} r{remainder}</>}
+            </div>
+          </div>
+
+          {/* Mode toggle */}
+          <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:16 }}>
+            <Btn onClick={() => setMode("share")} color={mode==="share" ? "#fff" : "rgba(255,255,255,0.15)"}
+              style={{ color: mode==="share" ? "#b91c1c" : "#fff" }} small>
+              {"🎒"} Share into {divisor} bags
+            </Btn>
+            <Btn onClick={() => setMode("group")} color={mode==="group" ? "#fff" : "rgba(255,255,255,0.15)"}
+              style={{ color: mode==="group" ? "#b91c1c" : "#fff" }} small>
+              {"📦"} Groups of {divisor}
+            </Btn>
+          </div>
+
+          {/* Visualisation */}
+          {mode === "share" && total <= 60 && (
+            <div className="fade-slide" style={{ background:"rgba(255,255,255,0.08)", borderRadius:16, padding:16, marginBottom:16 }}>
+              <div style={{ fontSize:13, fontWeight:600, opacity:0.7, marginBottom:10 }}>
+                Sharing {total} {fruit} into {divisor} bags equally:
+              </div>
+              <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+                {Array.from({ length: divisor }, (_, bag) => {
+                  const itemsInBag = Math.floor(total / divisor);
+                  const extra = bag < remainder ? 1 : 0;
+                  const count = itemsInBag + extra;
+                  return <div key={bag} style={{
+                    background:"rgba(255,255,255,0.1)", borderRadius:14, padding:"10px 8px",
+                    minWidth: 60, textAlign:"center",
+                  }}>
+                    <div style={{ fontSize:10, fontWeight:600, opacity:0.6, marginBottom:4 }}>Bag {bag+1}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:2, minHeight:24 }}>
+                      {Array.from({ length: count }, (_, j) => (
+                        <span key={j} className={animated?"pop-in":""} style={{
+                          fontSize: count > 8 ? 14 : 18,
+                          animationDelay: `${(bag * count + j) * 30}ms`,
+                        }}>{fruit}</span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:13, fontWeight:800, marginTop:4 }}>{count}</div>
+                  </div>;
+                })}
+              </div>
+              {!canDivide && <div style={{ textAlign:"center", marginTop:10, fontSize:13, color:"#fbbf24", fontWeight:600 }}>
+                {"⚠️"} {remainder} left over! {total} doesn't split evenly into {divisor}.
+              </div>}
+            </div>
+          )}
+
+          {mode === "group" && total <= 60 && (
+            <div className="fade-slide" style={{ background:"rgba(255,255,255,0.08)", borderRadius:16, padding:16, marginBottom:16 }}>
+              <div style={{ fontSize:13, fontWeight:600, opacity:0.7, marginBottom:10 }}>
+                How many groups of {divisor} fit in {total}?
+              </div>
+              <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+                {Array.from({ length: Math.floor(total / divisor) }, (_, g) => (
+                  <div key={g} style={{
+                    background:"rgba(255,255,255,0.1)", borderRadius:12, padding:"8px 6px",
+                    textAlign:"center", minWidth:50,
+                  }}>
+                    <div style={{ fontSize:10, fontWeight:600, opacity:0.5, marginBottom:2 }}>Group {g+1}</div>
+                    <div style={{ display:"flex", justifyContent:"center", gap:1 }}>
+                      {Array.from({ length: divisor }, (_, j) => (
+                        <span key={j} className={animated?"pop-in":""} style={{
+                          fontSize: divisor > 6 ? 13 : 17,
+                          animationDelay: `${(g * divisor + j) * 30}ms`,
+                        }}>{fruit}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {remainder > 0 && <div style={{
+                  background:"rgba(251,191,36,0.15)", borderRadius:12, padding:"8px 6px",
+                  textAlign:"center", minWidth:50, border:"2px dashed rgba(251,191,36,0.4)",
+                }}>
+                  <div style={{ fontSize:10, fontWeight:600, opacity:0.5, marginBottom:2 }}>Left</div>
+                  <div style={{ display:"flex", justifyContent:"center", gap:1 }}>
+                    {Array.from({ length: remainder }, (_, j) => (
+                      <span key={j} style={{ fontSize:17 }}>{fruit}</span>
+                    ))}
+                  </div>
+                </div>}
+              </div>
+              <div style={{ textAlign:"center", marginTop:10, fontSize:14, fontWeight:700 }}>
+                {Math.floor(total/divisor)} groups{remainder > 0 ? ` with ${remainder} left over` : ""}!
+              </div>
+            </div>
+          )}
+
+          {total > 60 && (
+            <div style={{ textAlign:"center", padding:20, opacity:0.7 }}>
+              (Too many to show — try a smaller number!)
+            </div>
+          )}
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🤔"} Two ways to think about ÷</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              <strong>{total} ÷ {divisor}</strong> can mean two things:<br/><br/>
+              <strong>🎒 Sharing:</strong> "I have {total} sweets and {divisor} friends. How many does each friend get?"<br/>
+              → Split {total} into {divisor} equal piles<br/><br/>
+              <strong>📦 Grouping:</strong> "I have {total} eggs and each box holds {divisor}. How many boxes do I need?"<br/>
+              → Count how many {divisor}s fit in {total}<br/><br/>
+              <strong>Both give the same answer!</strong> That's the magic of division.
+            </div>
+          </div>
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🔗"} Connect it to multiplication!</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              {canDivide ? <>
+                {total} ÷ {divisor} = <strong>{result}</strong> because <strong>{divisor} × {result} = {total}</strong><br/>
+                Division is asking: "what number × {divisor} = {total}?"<br/>
+                If you know your <strong>{divisor}× table</strong>, you already know the answer!
+              </> : <>
+                {total} doesn't divide evenly by {divisor}.<br/>
+                {divisor} × {Math.floor(total/divisor)} = {divisor * Math.floor(total/divisor)} (not quite {total})<br/>
+                {divisor} × {Math.floor(total/divisor)+1} = {divisor * (Math.floor(total/divisor)+1)} (too much!)<br/>
+                So it's {Math.floor(total/divisor)} remainder {remainder}.
+              </>}
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── BREAK IT APART ─────────────────────────────────────────────
+    function BreakApart({ onBack }) {
+      const [a, setA] = useState(7);
+      const [b, setB] = useState(6);
+      const [splitAt, setSplitAt] = useState(5);
+      const [showSplit, setShowSplit] = useState(false);
+
+      const total = a * b;
+      const part1 = splitAt * b;
+      const part2 = (a - splitAt) * b;
+      const validSplit = splitAt > 0 && splitAt < a;
+
+      const cellSize = Math.min(32, Math.floor(260 / Math.max(a, b)));
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Break It Apart" />
+
+          <div style={{ display:"flex", gap:16, justifyContent:"center", marginBottom:16 }}>
+            <NumPicker label="" value={a} onChange={(v) => { setA(v); setSplitAt(Math.min(splitAt, v-1)); }} max={12} />
+            <div style={{ fontSize:28, fontWeight:800, alignSelf:"center" }}>{"×"}</div>
+            <NumPicker label="" value={b} onChange={setB} max={12} />
+          </div>
+
+          <div style={{ textAlign:"center", fontSize:28, fontWeight:800, marginBottom:12 }}>
+            {a} × {b} = {showSplit && validSplit ? <><span style={{ color:"#93c5fd" }}>{part1}</span> + <span style={{ color:"#fca5a5" }}>{part2}</span> = </> : ""}{total}
+          </div>
+
+          {/* Split slider */}
+          <div style={{ textAlign:"center", marginBottom:8 }}>
+            <div style={{ fontSize:13, opacity:0.7, marginBottom:4 }}>Split {a} into:</div>
+            <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+              {Array.from({ length: a - 1 }, (_, i) => i + 1).map(s => (
+                <button key={s} onClick={() => { playSound("click"); setSplitAt(s); setShowSplit(true); }}
+                  style={{
+                    width:40, height:40, borderRadius:10, border: splitAt === s && showSplit ? "3px solid #fff" : "3px solid transparent",
+                    background: splitAt === s && showSplit ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                    color:"#fff", cursor:"pointer", fontWeight:700, fontSize:13,
+                  }}>{s}+{a-s}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Grid visualisation */}
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:16, marginTop:12 }}>
+            <div style={{
+              display:"grid", gridTemplateColumns:`repeat(${b}, ${cellSize}px)`,
+              gap:2, padding:10, background:"rgba(255,255,255,0.08)", borderRadius:14,
+            }}>
+              {Array.from({ length: a * b }, (_, i) => {
+                const row = Math.floor(i / b);
+                const isTop = row < splitAt;
+                return <div key={i} style={{
+                  width:cellSize, height:cellSize, borderRadius:4,
+                  background: !showSplit ? "#fbbf24" : isTop ? "#93c5fd" : "#fca5a5",
+                  transition: "background 0.3s",
+                  borderBottom: showSplit && row === splitAt - 1 ? "3px solid #fff" : "none",
+                }} />;
+              })}
+            </div>
+          </div>
+
+          {showSplit && validSplit && (
+            <div className="fade-slide" style={{ textAlign:"center", marginBottom:16 }}>
+              <div style={{ display:"flex", justifyContent:"center", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+                <div style={{ background:"rgba(147,197,253,0.2)", borderRadius:12, padding:"10px 16px" }}>
+                  <div style={{ fontSize:12, opacity:0.7 }}>Top part</div>
+                  <div style={{ fontSize:20, fontWeight:800 }}><span style={{ color:"#93c5fd" }}>{splitAt}</span> × {b} = <span style={{ color:"#93c5fd" }}>{part1}</span></div>
+                </div>
+                <div style={{ fontSize:24, fontWeight:800 }}>{"+"}</div>
+                <div style={{ background:"rgba(252,165,165,0.2)", borderRadius:12, padding:"10px 16px" }}>
+                  <div style={{ fontSize:12, opacity:0.7 }}>Bottom part</div>
+                  <div style={{ fontSize:20, fontWeight:800 }}><span style={{ color:"#fca5a5" }}>{a-splitAt}</span> × {b} = <span style={{ color:"#fca5a5" }}>{part2}</span></div>
+                </div>
+              </div>
+              <div style={{ marginTop:10, fontSize:16, fontWeight:700 }}>
+                {part1} + {part2} = {total} ✓
+              </div>
+            </div>
+          )}
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🧠"} The superpower of splitting</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              Don't know {a} × {b}? <strong>Break it into parts you DO know!</strong><br/><br/>
+              {a} × {b}<br/>
+              = ({splitAt || 5} × {b}) + ({a - (splitAt || 5)} × {b})<br/>
+              = {(splitAt || 5) * b} + {(a - (splitAt || 5)) * b}<br/>
+              = <strong>{total}</strong><br/><br/>
+              Splitting at <strong>5</strong> or <strong>10</strong> is usually easiest because the 5× and 10× tables are simple!
+            </div>
+          </div>
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🎯"} Real example</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              Stuck on <strong>7 × 8</strong>?<br/>
+              Split it: (5 × 8) + (2 × 8) = 40 + 16 = <strong>56</strong><br/><br/>
+              Stuck on <strong>9 × 6</strong>?<br/>
+              Split it: (10 × 6) − (1 × 6) = 60 − 6 = <strong>54</strong><br/>
+              (You can subtract too!)
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── DOUBLING CHAIN ─────────────────────────────────────────────
+    function DoublingChain({ onBack }) {
+      const [base, setBase] = useState(6);
+      const [revealed, setRevealed] = useState(1);
+
+      const chain = [
+        { mult: 1, val: base },
+        { mult: 2, val: 2 * base },
+        { mult: 4, val: 4 * base },
+        { mult: 8, val: 8 * base },
+      ];
+
+      // Also show the 3× trick: double + original
+      const threeX = 3 * base;
+      // And 5× = half of 10×
+      const fiveX = 5 * base;
+      const tenX = 10 * base;
+
+      useEffect(() => setRevealed(1), [base]);
+
+      return <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #3b0764 0%, #6b21a8 50%, #8b5cf6 100%)", padding:"20px 16px", color:"#fff" }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <BackBar onBack={onBack} title="Doubling Chain" />
+
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            <div style={{ fontSize:14, opacity:0.7, marginBottom:8 }}>Pick a number to multiply:</div>
+            <div style={{ display:"flex", gap:6, justifyContent:"center", flexWrap:"wrap" }}>
+              {[3,4,5,6,7,8,9].map(n => (
+                <button key={n} onClick={() => { playSound("click"); setBase(n); }}
+                  style={{
+                    width:44, height:44, borderRadius:12, border: base===n ? "3px solid #fff" : "3px solid transparent",
+                    background: base===n ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                    color:"#fff", cursor:"pointer", fontWeight:800, fontSize:20,
+                  }}>{n}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Doubling chain */}
+          <div style={{ fontSize:15, fontWeight:700, opacity:0.7, marginBottom:10, textAlign:"center" }}>{"🔗"} The Doubling Chain</div>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:0, marginBottom:20 }}>
+            {chain.map((step, i) => {
+              const visible = i < revealed;
+              return <React.Fragment key={i}>
+                {i > 0 && <div style={{ fontSize:24, color: visible ? "#fbbf24" : "rgba(255,255,255,0.2)", fontWeight:800, margin:"4px 0" }}>{"↓ ×2"}</div>}
+                <div className={visible ? "fade-slide" : ""} style={{
+                  background: visible ? `rgba(255,255,255,${0.1 + i * 0.05})` : "rgba(255,255,255,0.04)",
+                  borderRadius:14, padding:"14px 24px", width:"100%", maxWidth:360,
+                  textAlign:"center", opacity: visible ? 1 : 0.25, transition:"all 0.3s",
+                  border: visible ? "2px solid rgba(255,255,255,0.2)" : "2px solid transparent",
+                }}>
+                  <div style={{ fontSize:24, fontWeight:800 }}>
+                    <span style={{ color:"#c4b5fd" }}>{step.mult}</span> × <span style={{ color:"#fbbf24" }}>{base}</span> = <span style={{ color:"#4ade80" }}>{visible ? step.val : "?"}</span>
+                  </div>
+                  {i > 0 && visible && <div style={{ fontSize:12, opacity:0.6, marginTop:2 }}>
+                    (double {chain[i-1].val} = {step.val})
+                  </div>}
+                </div>
+              </React.Fragment>;
+            })}
+          </div>
+
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            {revealed < 4 ? (
+              <Btn onClick={() => { playSound("ding"); setRevealed(r => r + 1); }} color="#fbbf24" style={{ color:"#3b0764" }}>
+                {"×2"} Double it! ({revealed}/4)
+              </Btn>
+            ) : (
+              <Btn onClick={() => setRevealed(1)} color="rgba(255,255,255,0.2)">{"🔄"} Reset chain</Btn>
+            )}
+          </div>
+
+          {/* Bonus tricks */}
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"⚡"} More tricks with {base}</div>
+            <div style={{ fontSize:14, lineHeight:2, opacity:0.9 }}>
+              <strong>3× trick:</strong> double + add one more → 2×{base} + {base} = {2*base} + {base} = <strong>{threeX}</strong><br/>
+              <strong>5× trick:</strong> half of 10× → 10×{base} = {tenX}, half = <strong>{fiveX}</strong><br/>
+              <strong>9× trick:</strong> 10× minus one → 10×{base} − {base} = {tenX} − {base} = <strong>{9*base}</strong><br/>
+              <strong>6× trick:</strong> 5× plus one more → {fiveX} + {base} = <strong>{6*base}</strong>
+            </div>
+          </div>
+
+          <div className="fade-slide" style={{ background:"rgba(255,255,255,0.1)", borderRadius:16, padding:18 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>{"🧠"} Why this works</div>
+            <div style={{ fontSize:13, lineHeight:1.7, opacity:0.9 }}>
+              Doubling is the easiest maths operation — you just add a number to itself!<br/><br/>
+              If you know <strong>1 × {base} = {base}</strong>, you can build everything:<br/>
+              • Double → <strong>2 × {base} = {2*base}</strong><br/>
+              • Double again → <strong>4 × {base} = {4*base}</strong><br/>
+              • Double again → <strong>8 × {base} = {8*base}</strong><br/><br/>
+              Now combine: 3× = 2× + 1×, 5× = 4× + 1×, 6× = 4× + 2×, 7× = 8× − 1×
+            </div>
+          </div>
+        </div>
+      </div>;
+    }
+
+    // ─── APP ────────────────────────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const goHome = () => setScreen("home");
+
+      switch (screen) {
+        case "rect": return <RectBuilder onBack={goHome} />;
+        case "family": return <FactFamily onBack={goHome} />;
+        case "divide": return <DivisionVis onBack={goHome} />;
+        case "split": return <BreakApart onBack={goHome} />;
+        case "chain": return <DoublingChain onBack={goHome} />;
+        default: return <Home onNav={setScreen} />;
+      }
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
