@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coordinates & Shape Builder!</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+    @keyframes bounceIn { 0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)} }
+    @keyframes shake { 0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn { 0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)} }
+    @keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+    @keyframes confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+    @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+    @keyframes drawGrid { from{opacity:0}to{opacity:1} }
+    .bounce-in{animation:bounceIn .5s ease-out} .shake{animation:shake .4s ease-out}
+    .fade-slide{animation:fadeSlide .4s ease-out both} .pop-in{animation:popIn .3s ease-out both}
+    .float{animation:float 3s ease-in-out infinite} .pulse{animation:pulse 2s ease-in-out infinite}
+    .confetti-piece{position:fixed;top:-20px;animation:confettiFall 3s ease-in forwards;pointer-events:none;z-index:9999;font-size:24px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const ENCOURAGEMENTS = [
+      "Amazing! 🌟","Brilliant! 💡","Superstar! ⭐","You rock! 🪨",
+      "Incredible! 🌈","Genius! 🧠","Fantastic! 🎉","Wow! 🚀",
+      "Perfect! 🎯","On fire! 🔥","Legend! 🏆","Unstoppable! ⚡",
+    ];
+    const WRONG_MSGS = [
+      "Almost! Try again! 💪","So close! 🌟","Oops! No worries! 😊",
+      "Keep going! 🚀","Nearly there! 🌈","Don't give up! ✨",
+    ];
+
+    function randFrom(a) { return a[Math.floor(Math.random()*a.length)]; }
+    function randInt(min,max) { return Math.floor(Math.random()*(max-min+1))+min; }
+    function shuffle(a) { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+
+    function playSound(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination); gain.gain.value = 0.12;
+        if (type==="correct") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.1); osc.frequency.setValueAtTime(784,ctx.currentTime+0.2); gain.gain.setValueAtTime(0,ctx.currentTime+0.35); osc.stop(ctx.currentTime+0.35); }
+        else if (type==="wrong") { osc.frequency.value=200; osc.type="sawtooth"; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.3); osc.stop(ctx.currentTime+0.3); }
+        else if (type==="levelup") { osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ctx.currentTime+0.15); osc.frequency.setValueAtTime(784,ctx.currentTime+0.3); osc.frequency.setValueAtTime(1047,ctx.currentTime+0.45); gain.gain.setValueAtTime(0,ctx.currentTime+0.7); osc.stop(ctx.currentTime+0.7); }
+        else if (type==="click") { osc.frequency.value=800; osc.start(); gain.gain.setValueAtTime(0,ctx.currentTime+0.06); osc.stop(ctx.currentTime+0.06); }
+      } catch(e) {}
+    }
+
+    function Confetti({ active }) {
+      const [pieces, setPieces] = useState([]);
+      useEffect(() => {
+        if (!active) return;
+        setPieces(Array.from({length:25},(_,i) => ({ id:Date.now()+i, left:Math.random()*100, delay:Math.random()*0.5, emoji:randFrom(["🌟","⭐","🎉","🎊","✨","💖","📐","📍"]) })));
+        const t = setTimeout(() => setPieces([]), 3500);
+        return () => clearTimeout(t);
+      }, [active]);
+      return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left:`${p.left}%`, animationDelay:`${p.delay}s` }}>{p.emoji}</div>)}</>;
+    }
+
+    function Btn({ children, onClick, color="#4f46e5", big, disabled, active, style:s }) {
+      return <button onClick={() => { if(!disabled){playSound("click");onClick?.();}}} disabled={disabled} style={{
+        padding: big?"16px 32px":"10px 20px", borderRadius:14,
+        border: active ? "3px solid #fff" : "3px solid transparent",
+        background: disabled?"#cbd5e1":color, color:"#fff", fontWeight:700,
+        fontSize: big?18:14, cursor: disabled?"default":"pointer",
+        boxShadow: disabled?"none":`0 4px 14px ${color}44`, transition:"all 0.2s", ...s,
+      }}>{children}</button>;
+    }
+
+    function useStars() {
+      const [stars, setStars] = useState(() => parseInt(localStorage.getItem("coord_stars"))||0);
+      const add = useCallback((n) => setStars(s => { const v=s+n; localStorage.setItem("coord_stars",v); return v; }), []);
+      return [stars, add];
+    }
+
+    // ─── COORDINATE GRID COMPONENT ──────────────────────────────
+    function CoordGrid({ size=300, range=5, points=[], highlight=null, onClick, showAllQuadrants=false, shapes=[], gridLines=true }) {
+      const min = showAllQuadrants ? -range : 0;
+      const max = range;
+      const total = max - min;
+      const cellSize = size / (total + 1);
+      const toPixel = (coord) => ({
+        x: (coord[0] - min + 0.5) * cellSize,
+        y: size - (coord[1] - min + 0.5) * cellSize,
+      });
+
+      const handleClick = (e) => {
+        if (!onClick) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        const gx = Math.round((px / cellSize) - 0.5 + min);
+        const gy = Math.round((size - py) / cellSize - 0.5 + min);
+        if (gx >= min && gx <= max && gy >= min && gy <= max) {
+          onClick([gx, gy]);
+        }
+      };
+
+      return (
+        <svg width={size} height={size} style={{border:"2px solid #e2e8f0", borderRadius:8, background:"#fefefe", cursor: onClick?"crosshair":"default"}} onClick={handleClick}>
+          {gridLines && Array.from({length: total+1}, (_, i) => {
+            const val = min + i;
+            const px = (i + 0.5) * cellSize;
+            return <g key={`grid-${i}`}>
+              <line x1={px} y1={0} x2={px} y2={size} stroke="#e2e8f0" strokeWidth={1}/>
+              <line x1={0} y1={px} x2={size} y2={px} stroke="#e2e8f0" strokeWidth={1}/>
+            </g>;
+          })}
+          {/* Axes */}
+          <line x1={toPixel([min,0]).x} y1={toPixel([min,0]).y} x2={toPixel([max,0]).x} y2={toPixel([max,0]).y} stroke="#1e293b" strokeWidth={2}/>
+          <line x1={toPixel([0,min]).x} y1={toPixel([0,min]).y} x2={toPixel([0,max]).x} y2={toPixel([0,max]).y} stroke="#1e293b" strokeWidth={2}/>
+          {/* Axis labels */}
+          {Array.from({length: total+1}, (_, i) => {
+            const val = min + i;
+            const xp = toPixel([val, 0]);
+            const yp = toPixel([0, val]);
+            return <g key={`label-${i}`}>
+              <text x={xp.x} y={xp.y + 16} textAnchor="middle" fontSize={10} fill="#64748b">{val}</text>
+              {val !== 0 && <text x={yp.x - 14} y={yp.y + 4} textAnchor="middle" fontSize={10} fill="#64748b">{val}</text>}
+            </g>;
+          })}
+          {/* Shape lines */}
+          {shapes.map((shape, si) => {
+            if (shape.points.length < 2) return null;
+            const pathPts = shape.points.map(p => toPixel(p));
+            const d = pathPts.map((p, i) => `${i===0?"M":"L"}${p.x},${p.y}`).join(" ") + (shape.closed ? "Z" : "");
+            return <path key={si} d={d} fill={shape.closed ? (shape.fill || "rgba(99,102,241,0.1)") : "none"} stroke={shape.color || "#6366f1"} strokeWidth={2.5} strokeLinejoin="round"/>;
+          })}
+          {/* Points */}
+          {points.map((p, i) => {
+            const {x, y} = toPixel(p.coord);
+            const isHl = highlight && highlight[0]===p.coord[0] && highlight[1]===p.coord[1];
+            return <g key={i}>
+              <circle cx={x} cy={y} r={isHl ? 8 : 6} fill={p.color || "#6366f1"} stroke="#fff" strokeWidth={2}/>
+              {p.label && <text x={x+10} y={y-8} fontSize={11} fontWeight={700} fill={p.color || "#6366f1"}>{p.label}</text>}
+            </g>;
+          })}
+          {/* Origin label */}
+          <text x={toPixel([0,0]).x - 12} y={toPixel([0,0]).y + 16} fontSize={10} fill="#1e293b" fontWeight={700}>0</text>
+        </svg>
+      );
+    }
+
+    // ─── GAME MODE 1: READ COORDINATES ──────────────────────────
+    function ReadCoordinates({ onBack, addStars, level }) {
+      const showAll = level >= 2;
+      const range = level >= 2 ? 5 : 6;
+      const [q, setQ] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const [selected, setSelected] = useState(null);
+      const totalRounds = 10;
+
+      const genQ = useCallback(() => {
+        const min = showAll ? -range : 0;
+        const x = randInt(min, range);
+        const y = randInt(min, range);
+        // Generate wrong options
+        const correct = `(${x}, ${y})`;
+        const wrongs = new Set();
+        while (wrongs.size < 3) {
+          const wx = randInt(min, range);
+          const wy = randInt(min, range);
+          const w = `(${wx}, ${wy})`;
+          if (w !== correct) wrongs.add(w);
+        }
+        const options = shuffle([correct, ...wrongs]);
+        setQ({ x, y, correct, options });
+        setSelected(null);
+        setMsg("");
+      }, [showAll, range]);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      const handleAnswer = (opt) => {
+        if (selected) return;
+        setSelected(opt);
+        if (opt === q.correct) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(1);
+          setConfetti(c => c + 1);
+        } else {
+          playSound("wrong");
+          setMsg(`${randFrom(WRONG_MSGS)} It's (${q.x}, ${q.y})!`);
+        }
+      };
+
+      const next = () => {
+        if (round + 1 >= totalRounds) { setQ(null); return; }
+        setRound(r => r + 1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) return <div style={{textAlign:"center",padding:32}}>
+          <Confetti active={confetti}/>
+          <div style={{fontSize:48}} className="bounce-in">🏆</div>
+          <h2 style={{margin:"16px 0"}}>Round Complete!</h2>
+          <p style={{fontSize:20,marginBottom:16}}>Score: {score}/{totalRounds}</p>
+          <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+            <Btn onClick={()=>{setRound(0);setScore(0);genQ()}} color="#10b981">Play Again</Btn>
+            <Btn onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+        return null;
+      }
+
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>⭐ {score}/{totalRounds}</span>
+            <span style={{fontSize:13,color:"#64748b"}}>Round {round+1}/{totalRounds}</span>
+          </div>
+          <h3 style={{marginBottom:8,color:"#1e293b"}}>📍 What are the coordinates of the point?</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Remember: along the corridor (x) then up the stairs (y)!</p>
+          <Confetti active={confetti}/>
+          <CoordGrid
+            size={280}
+            range={range}
+            showAllQuadrants={showAll}
+            points={[{coord:[q.x, q.y], color:"#ef4444"}]}
+          />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,maxWidth:320,margin:"16px auto"}}>
+            {q.options.map(opt => (
+              <Btn key={opt} onClick={() => handleAnswer(opt)}
+                color={selected ? (opt===q.correct ? "#10b981" : opt===selected ? "#ef4444" : "#94a3b8") : "#6366f1"}
+                disabled={!!selected && opt!==q.correct && opt!==selected}
+              >{opt}</Btn>
+            ))}
+          </div>
+          {msg && <p className="bounce-in" style={{fontSize:18,fontWeight:700,margin:"8px 0",color: selected===q.correct?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {selected && <Btn onClick={next} color="#6366f1" big style={{marginTop:8}}>Next →</Btn>}
+        </div>
+      );
+    }
+
+    // ─── GAME MODE 2: PLOT COORDINATES ──────────────────────────
+    function PlotCoordinates({ onBack, addStars, level }) {
+      const showAll = level >= 2;
+      const range = level >= 2 ? 5 : 6;
+      const [target, setTarget] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const [plotted, setPlotted] = useState(null);
+      const totalRounds = 10;
+
+      const genTarget = useCallback(() => {
+        const min = showAll ? -range : 0;
+        setTarget([randInt(min, range), randInt(min, range)]);
+        setPlotted(null);
+        setMsg("");
+      }, [showAll, range]);
+
+      useEffect(() => { genTarget(); }, [genTarget]);
+
+      const handleClick = (coord) => {
+        if (plotted) return;
+        setPlotted(coord);
+        if (coord[0]===target[0] && coord[1]===target[1]) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(1);
+          setConfetti(c => c + 1);
+        } else {
+          playSound("wrong");
+          setMsg(`${randFrom(WRONG_MSGS)} The correct spot is shown in green.`);
+        }
+      };
+
+      const next = () => {
+        if (round + 1 >= totalRounds) { setTarget(null); return; }
+        setRound(r => r + 1);
+        genTarget();
+      };
+
+      if (!target) {
+        if (round > 0) return <div style={{textAlign:"center",padding:32}}>
+          <Confetti active={confetti}/>
+          <div style={{fontSize:48}} className="bounce-in">🏆</div>
+          <h2 style={{margin:"16px 0"}}>Round Complete!</h2>
+          <p style={{fontSize:20,marginBottom:16}}>Score: {score}/{totalRounds}</p>
+          <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+            <Btn onClick={()=>{setRound(0);setScore(0);genTarget()}} color="#10b981">Play Again</Btn>
+            <Btn onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+        return null;
+      }
+
+      const points = [];
+      if (plotted) {
+        const isCorrect = plotted[0]===target[0] && plotted[1]===target[1];
+        if (!isCorrect) {
+          points.push({coord: plotted, color:"#ef4444", label:"yours"});
+          points.push({coord: target, color:"#10b981", label:"correct"});
+        } else {
+          points.push({coord: target, color:"#10b981"});
+        }
+      }
+
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>⭐ {score}/{totalRounds}</span>
+            <span style={{fontSize:13,color:"#64748b"}}>Round {round+1}/{totalRounds}</span>
+          </div>
+          <h3 style={{marginBottom:8,color:"#1e293b"}}>📍 Click to plot: ({target[0]}, {target[1]})</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>Click the correct position on the grid!</p>
+          <Confetti active={confetti}/>
+          <CoordGrid
+            size={300}
+            range={range}
+            showAllQuadrants={showAll}
+            points={points}
+            onClick={handleClick}
+          />
+          {msg && <p className="bounce-in" style={{fontSize:18,fontWeight:700,margin:"12px 0",color: plotted && plotted[0]===target[0] && plotted[1]===target[1] ?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {plotted && <Btn onClick={next} color="#6366f1" big style={{marginTop:8}}>Next →</Btn>}
+        </div>
+      );
+    }
+
+    // ─── GAME MODE 3: SHAPE BUILDER (2D) ────────────────────────
+    function ShapeBuilder2D({ onBack, addStars }) {
+      const CHALLENGES = [
+        { name:"Square", coords:[[1,1],[1,4],[4,4],[4,1]], hint:"4 equal sides, 4 right angles" },
+        { name:"Rectangle", coords:[[1,1],[1,4],[6,4],[6,1]], hint:"2 pairs of equal sides" },
+        { name:"Right-angled Triangle", coords:[[1,1],[1,5],[5,1]], hint:"One angle is exactly 90°" },
+        { name:"Isosceles Triangle", coords:[[1,1],[3,5],[5,1]], hint:"2 sides the same length" },
+        { name:"Parallelogram", coords:[[1,1],[2,4],[6,4],[5,1]], hint:"Opposite sides are parallel and equal" },
+        { name:"Rhombus", coords:[[3,0],[0,3],[3,6],[6,3]], hint:"4 equal sides, like a tilted square" },
+        { name:"Kite", coords:[[3,0],[1,3],[3,5],[5,3]], hint:"2 pairs of adjacent equal sides" },
+        { name:"Trapezium", coords:[[2,4],[5,4],[6,1],[1,1]], hint:"Exactly 1 pair of parallel sides" },
+      ];
+
+      const [challengeIdx, setChallengeIdx] = useState(0);
+      const [placed, setPlaced] = useState([]);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const [done, setDone] = useState(false);
+      const [showHint, setShowHint] = useState(false);
+
+      const challenge = CHALLENGES[challengeIdx];
+      const needed = challenge.coords.length;
+
+      const handleClick = (coord) => {
+        if (done) return;
+        // Check if already placed
+        if (placed.find(p => p[0]===coord[0] && p[1]===coord[1])) return;
+        const newPlaced = [...placed, coord];
+        setPlaced(newPlaced);
+
+        if (newPlaced.length === needed) {
+          // Check if the shape matches (order-independent, check same set of points)
+          const sortCoords = (arr) => arr.map(c => `${c[0]},${c[1]}`).sort().join("|");
+          if (sortCoords(newPlaced) === sortCoords(challenge.coords)) {
+            playSound("correct");
+            setMsg(randFrom(ENCOURAGEMENTS) + ` That's a perfect ${challenge.name}!`);
+            addStars(2);
+            setConfetti(c => c + 1);
+            setDone(true);
+          } else {
+            playSound("wrong");
+            setMsg("Not quite right! Try again — check the hint!");
+            setPlaced([]);
+          }
+        }
+      };
+
+      const nextChallenge = () => {
+        if (challengeIdx + 1 >= CHALLENGES.length) {
+          setChallengeIdx(0);
+        } else {
+          setChallengeIdx(i => i + 1);
+        }
+        setPlaced([]);
+        setMsg("");
+        setDone(false);
+        setShowHint(false);
+      };
+
+      const points = placed.map((c, i) => ({ coord: c, color: "#6366f1", label: String.fromCharCode(65+i) }));
+      const shapes = placed.length >= 2 ? [{ points: placed, closed: placed.length === needed && done, color: "#6366f1", fill: "rgba(99,102,241,0.1)" }] : [];
+
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>Shape {challengeIdx+1}/{CHALLENGES.length}</span>
+          </div>
+          <h3 style={{marginBottom:4,color:"#1e293b"}}>🔷 Build a {challenge.name}</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:4}}>Click {needed} points on the grid to make the shape</p>
+          {showHint && <p style={{fontSize:13,color:"#8b5cf6",marginBottom:8,fontStyle:"italic"}}>💡 Hint: {challenge.hint}</p>}
+          {!showHint && !done && <Btn onClick={()=>setShowHint(true)} color="#8b5cf6" style={{marginBottom:8,fontSize:12,padding:"4px 12px"}}>Show Hint</Btn>}
+          <Confetti active={confetti}/>
+          <CoordGrid
+            size={300}
+            range={6}
+            points={points}
+            shapes={shapes}
+            onClick={handleClick}
+          />
+          <div style={{margin:"8px 0",display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:13,color:"#64748b"}}>Points placed: {placed.length}/{needed}</span>
+            {!done && placed.length > 0 && <Btn onClick={()=>setPlaced([])} color="#ef4444" style={{fontSize:12,padding:"4px 12px"}}>Clear</Btn>}
+          </div>
+          {msg && <p className="bounce-in" style={{fontSize:16,fontWeight:700,margin:"8px 0",color:done?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {done && <div style={{marginTop:8}}>
+            <p style={{fontSize:13,color:"#64748b",marginBottom:8}}>Coordinates: {challenge.coords.map(c=>`(${c[0]},${c[1]})`).join(" → ")}</p>
+            <Btn onClick={nextChallenge} color="#6366f1" big>Next Shape →</Btn>
+          </div>}
+        </div>
+      );
+    }
+
+    // ─── GAME MODE 4: 3D SHAPE NETS ─────────────────────────────
+    function ShapeNets({ onBack, addStars }) {
+      const NETS = [
+        { name:"Cube", faces:6, edges:12, vertices:8, description:"6 square faces, all the same size", realWorld:"Dice, Rubik's cube, sugar cube",
+          netSvg: (color) => <svg width={200} height={240} viewBox="0 0 200 240">
+            <rect x={60} y={0} width={40} height={40} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <rect x={20} y={40} width={40} height={40} fill={color} opacity={0.15} stroke={color} strokeWidth={2}/>
+            <rect x={60} y={40} width={40} height={40} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <rect x={100} y={40} width={40} height={40} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <rect x={140} y={40} width={40} height={40} fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <rect x={60} y={80} width={40} height={40} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <text x={100} y={145} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>Cross-shaped net</text>
+          </svg>
+        },
+        { name:"Cuboid", faces:6, edges:12, vertices:8, description:"6 rectangular faces, opposite faces are equal", realWorld:"Cereal box, brick, book",
+          netSvg: (color) => <svg width={220} height={180} viewBox="0 0 220 180">
+            <rect x={60} y={0} width={60} height={30} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <rect x={0} y={30} width={60} height={40} fill={color} opacity={0.15} stroke={color} strokeWidth={2}/>
+            <rect x={60} y={30} width={60} height={40} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <rect x={120} y={30} width={60} height={40} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <rect x={180} y={30} width={40} height={40} fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <rect x={60} y={70} width={60} height={30} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <text x={110} y={120} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>T-shaped net</text>
+          </svg>
+        },
+        { name:"Triangular Prism", faces:5, edges:9, vertices:6, description:"2 triangular ends + 3 rectangular sides", realWorld:"Toblerone box, tent, roof",
+          netSvg: (color) => <svg width={200} height={200} viewBox="0 0 200 200">
+            <rect x={30} y={50} width={50} height={70} fill={color} opacity={0.15} stroke={color} strokeWidth={2}/>
+            <rect x={80} y={50} width={50} height={70} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <rect x={130} y={50} width={50} height={70} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <polygon points="80,50 105,20 130,50" fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <polygon points="80,120 105,150 130,120" fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <text x={100} y={175} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>3 rectangles + 2 triangles</text>
+          </svg>
+        },
+        { name:"Square-based Pyramid", faces:5, edges:8, vertices:5, description:"1 square base + 4 triangular sides", realWorld:"Egyptian pyramid, roof top",
+          netSvg: (color) => <svg width={200} height={220} viewBox="0 0 200 220">
+            <rect x={70} y={80} width={60} height={60} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <polygon points="70,80 100,30 130,80" fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <polygon points="70,140 100,190 130,140" fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <polygon points="70,80 20,110 70,140" fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <polygon points="130,80 180,110 130,140" fill={color} opacity={0.3} stroke={color} strokeWidth={2}/>
+            <text x={100} y={210} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>1 square + 4 triangles</text>
+          </svg>
+        },
+        { name:"Cylinder", faces:3, edges:2, vertices:0, description:"2 circular ends + 1 curved rectangle", realWorld:"Tin of beans, toilet roll, pipe",
+          netSvg: (color) => <svg width={200} height={200} viewBox="0 0 200 200">
+            <rect x={40} y={50} width={120} height={80} fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <ellipse cx={100} cy={40} rx={25} ry={18} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <ellipse cx={100} cy={140} rx={25} ry={18} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <text x={100} y={180} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>2 circles + 1 rectangle</text>
+          </svg>
+        },
+        { name:"Cone", faces:2, edges:1, vertices:1, description:"1 circular base + 1 curved sector", realWorld:"Ice cream cone, party hat, traffic cone",
+          netSvg: (color) => <svg width={200} height={200} viewBox="0 0 200 200">
+            <path d="M100,20 A80,80 0 0,1 180,100 L100,100 Z" fill={color} opacity={0.2} stroke={color} strokeWidth={2}/>
+            <path d="M100,20 A80,80 0 0,0 20,100 L100,100 Z" fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <ellipse cx={100} cy={150} rx={25} ry={18} fill={color} opacity={0.25} stroke={color} strokeWidth={2}/>
+            <text x={100} y={190} textAnchor="middle" fontSize={11} fill={color} fontWeight={600}>1 circle + 1 sector</text>
+          </svg>
+        },
+      ];
+
+      const [qIdx, setQIdx] = useState(0);
+      const [mode, setMode] = useState("learn"); // learn or quiz
+      const [quizQ, setQuizQ] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [score, setScore] = useState(0);
+      const [quizRound, setQuizRound] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const color = "#6366f1";
+
+      const startQuiz = () => {
+        setMode("quiz");
+        setScore(0);
+        setQuizRound(0);
+        genQuiz();
+      };
+
+      const genQuiz = () => {
+        const types = ["faces","edges","vertices","name"];
+        const qType = randFrom(types);
+        const shape = randFrom(NETS);
+        let question, correct, options;
+
+        if (qType === "faces") {
+          question = `How many faces does a ${shape.name} have?`;
+          correct = String(shape.faces);
+          options = shuffle([correct, ...new Set([String(shape.faces+1), String(shape.faces-1), String(shape.faces+2)].filter(x=>x!==correct))].slice(0,4));
+        } else if (qType === "edges") {
+          question = `How many edges does a ${shape.name} have?`;
+          correct = String(shape.edges);
+          options = shuffle([correct, ...new Set([String(shape.edges+1), String(shape.edges-1), String(shape.edges+3)].filter(x=>x!==correct))].slice(0,4));
+        } else if (qType === "vertices") {
+          question = `How many vertices does a ${shape.name} have?`;
+          correct = String(shape.vertices);
+          options = shuffle([correct, ...new Set([String(shape.vertices+1), String(shape.vertices+2), String(Math.max(0,shape.vertices-1))].filter(x=>x!==correct))].slice(0,4));
+        } else {
+          question = `${shape.description}. What 3D shape is this?`;
+          correct = shape.name;
+          options = shuffle([correct, ...shuffle(NETS.filter(n=>n.name!==shape.name)).slice(0,3).map(n=>n.name)]);
+        }
+        setQuizQ({ question, correct, options, shape });
+        setSelected(null);
+        setMsg("");
+      };
+
+      const handleQuizAnswer = (opt) => {
+        if (selected) return;
+        setSelected(opt);
+        if (opt === quizQ.correct) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(1);
+          setConfetti(c => c + 1);
+        } else {
+          playSound("wrong");
+          setMsg(`${randFrom(WRONG_MSGS)} Answer: ${quizQ.correct}`);
+        }
+      };
+
+      const nextQuiz = () => {
+        if (quizRound + 1 >= 10) {
+          setMode("results");
+          return;
+        }
+        setQuizRound(r => r + 1);
+        genQuiz();
+      };
+
+      if (mode === "results") {
+        return <div style={{textAlign:"center",padding:32}}>
+          <Confetti active={confetti}/>
+          <div style={{fontSize:48}} className="bounce-in">🏆</div>
+          <h2 style={{margin:"16px 0"}}>3D Shapes Quiz Complete!</h2>
+          <p style={{fontSize:20,marginBottom:16}}>Score: {score}/10</p>
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+            <Btn onClick={startQuiz} color="#10b981">Play Again</Btn>
+            <Btn onClick={()=>setMode("learn")} color="#8b5cf6">Back to Learning</Btn>
+            <Btn onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+      }
+
+      if (mode === "quiz") {
+        return <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={()=>setMode("learn")} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>⭐ {score}/10</span>
+            <span style={{fontSize:13,color:"#64748b"}}>Q{quizRound+1}/10</span>
+          </div>
+          <Confetti active={confetti}/>
+          <h3 style={{marginBottom:16,color:"#1e293b"}}>{quizQ?.question}</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,maxWidth:320,margin:"0 auto"}}>
+            {quizQ?.options.map(opt => (
+              <Btn key={opt} onClick={()=>handleQuizAnswer(opt)}
+                color={selected ? (opt===quizQ.correct ? "#10b981" : opt===selected ? "#ef4444" : "#94a3b8") : "#6366f1"}
+              >{opt}</Btn>
+            ))}
+          </div>
+          {msg && <p className="bounce-in" style={{fontSize:16,fontWeight:700,margin:"12px 0",color:selected===quizQ?.correct?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {selected && <Btn onClick={nextQuiz} color="#6366f1" big style={{marginTop:12}}>Next →</Btn>}
+        </div>;
+      }
+
+      // Learn mode
+      const net = NETS[qIdx];
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>Shape {qIdx+1}/{NETS.length}</span>
+          </div>
+          <h3 style={{marginBottom:4,color:"#1e293b"}}>📦 {net.name}</h3>
+          <p style={{fontSize:14,color:"#64748b",marginBottom:12}}>{net.description}</p>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:12}}>
+            {net.netSvg(color)}
+          </div>
+          <div style={{background:"#f1f5f9",borderRadius:12,padding:16,maxWidth:350,margin:"0 auto 16px",textAlign:"left"}}>
+            <p style={{fontSize:13,marginBottom:6}}><strong>Faces:</strong> {net.faces} | <strong>Edges:</strong> {net.edges} | <strong>Vertices:</strong> {net.vertices}</p>
+            <p style={{fontSize:13,color:"#64748b"}}>🌍 Real world: {net.realWorld}</p>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            <Btn onClick={() => setQIdx(i => (i-1+NETS.length)%NETS.length)} color="#64748b">← Previous</Btn>
+            <Btn onClick={() => setQIdx(i => (i+1)%NETS.length)} color="#6366f1">Next →</Btn>
+            <Btn onClick={startQuiz} color="#10b981" big>Take the Quiz!</Btn>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── GAME MODE 5: TRANSLATION & REFLECTION ──────────────────
+    function TranslateReflect({ onBack, addStars }) {
+      const [mode, setMode] = useState("translate"); // translate or reflect
+      const [q, setQ] = useState(null);
+      const [answer, setAnswer] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const totalRounds = 8;
+
+      const genQ = useCallback(() => {
+        if (mode === "translate") {
+          const startX = randInt(0, 3);
+          const startY = randInt(0, 3);
+          const dx = randInt(-3, 3);
+          const dy = randInt(-3, 3);
+          if (dx === 0 && dy === 0) { genQ(); return; }
+          const endX = startX + dx;
+          const endY = startY + dy;
+          if (endX < 0 || endX > 6 || endY < 0 || endY > 6) { genQ(); return; }
+          const dirX = dx > 0 ? `${dx} right` : dx < 0 ? `${Math.abs(dx)} left` : "";
+          const dirY = dy > 0 ? `${dy} up` : dy < 0 ? `${Math.abs(dy)} down` : "";
+          const instruction = [dirX, dirY].filter(Boolean).join(" and ");
+          setQ({ start: [startX, startY], end: [endX, endY], instruction: `Translate (${startX}, ${startY}) by ${instruction}` });
+        } else {
+          // Reflect in x-axis or y-axis
+          const axis = Math.random() > 0.5 ? "x" : "y";
+          const px = randInt(1, 5);
+          const py = randInt(1, 5);
+          let rx, ry;
+          if (axis === "x") { rx = px; ry = -py; }
+          else { rx = -px; ry = py; }
+          setQ({ start: [px, py], end: [rx, ry], instruction: `Reflect (${px}, ${py}) in the ${axis}-axis`, axis });
+        }
+        setAnswer(null);
+        setMsg("");
+      }, [mode]);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      const handleClick = (coord) => {
+        if (answer) return;
+        setAnswer(coord);
+        if (coord[0]===q.end[0] && coord[1]===q.end[1]) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(1);
+          setConfetti(c => c + 1);
+        } else {
+          playSound("wrong");
+          setMsg(`${randFrom(WRONG_MSGS)} Correct answer: (${q.end[0]}, ${q.end[1]})`);
+        }
+      };
+
+      const next = () => {
+        if (round + 1 >= totalRounds) { setQ(null); return; }
+        setRound(r => r + 1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) return <div style={{textAlign:"center",padding:32}}>
+          <Confetti active={confetti}/>
+          <div style={{fontSize:48}} className="bounce-in">🏆</div>
+          <h2 style={{margin:"16px 0"}}>Complete!</h2>
+          <p style={{fontSize:20,marginBottom:16}}>Score: {score}/{totalRounds}</p>
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+            <Btn onClick={()=>{setRound(0);setScore(0);genQ()}} color="#10b981">Play Again</Btn>
+            <Btn onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+        return null;
+      }
+
+      const showAll = mode === "reflect";
+      const points = [{coord: q.start, color:"#6366f1", label:"Start"}];
+      if (answer) {
+        const isCorrect = answer[0]===q.end[0] && answer[1]===q.end[1];
+        if (!isCorrect) {
+          points.push({coord: answer, color:"#ef4444", label:"yours"});
+          points.push({coord: q.end, color:"#10b981", label:"correct"});
+        } else {
+          points.push({coord: q.end, color:"#10b981", label:"Result"});
+        }
+      }
+
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>⭐ {score}/{totalRounds}</span>
+            <span style={{fontSize:13,color:"#64748b"}}>Round {round+1}/{totalRounds}</span>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:12}}>
+            <Btn onClick={()=>{setMode("translate");setRound(0);setScore(0);}} color={mode==="translate"?"#6366f1":"#94a3b8"} active={mode==="translate"}>Translate</Btn>
+            <Btn onClick={()=>{setMode("reflect");setRound(0);setScore(0);}} color={mode==="reflect"?"#8b5cf6":"#94a3b8"} active={mode==="reflect"}>Reflect</Btn>
+          </div>
+          <h3 style={{marginBottom:8,color:"#1e293b"}}>🔄 {q.instruction}</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:8}}>Click where the point ends up!</p>
+          <Confetti active={confetti}/>
+          <CoordGrid
+            size={300}
+            range={showAll ? 5 : 6}
+            showAllQuadrants={showAll}
+            points={points}
+            onClick={handleClick}
+          />
+          {msg && <p className="bounce-in" style={{fontSize:16,fontWeight:700,margin:"12px 0",color:answer && answer[0]===q.end[0] && answer[1]===q.end[1]?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {answer && <Btn onClick={next} color="#6366f1" big style={{marginTop:8}}>Next →</Btn>}
+        </div>
+      );
+    }
+
+    // ─── GAME MODE 6: COORDINATE PATTERNS ───────────────────────
+    function CoordPatterns({ onBack, addStars }) {
+      const [q, setQ] = useState(null);
+      const [answer, setAnswer] = useState(null);
+      const [score, setScore] = useState(0);
+      const [round, setRound] = useState(0);
+      const [msg, setMsg] = useState("");
+      const [confetti, setConfetti] = useState(0);
+      const totalRounds = 8;
+
+      const genQ = useCallback(() => {
+        const patterns = [
+          // Horizontal line
+          () => {
+            const y = randInt(1,5); const startX = randInt(0,2);
+            const pts = [[startX,y],[startX+1,y],[startX+2,y]];
+            return { pts, answer:[startX+3,y], hint:"What comes next in this horizontal line?" };
+          },
+          // Vertical line
+          () => {
+            const x = randInt(1,5); const startY = randInt(0,2);
+            const pts = [[x,startY],[x,startY+1],[x,startY+2]];
+            return { pts, answer:[x,startY+3], hint:"What comes next going up?" };
+          },
+          // Diagonal
+          () => {
+            const startX = randInt(0,2); const startY = randInt(0,2);
+            const pts = [[startX,startY],[startX+1,startY+1],[startX+2,startY+2]];
+            return { pts, answer:[startX+3,startY+3], hint:"What comes next on this diagonal?" };
+          },
+          // Step pattern
+          () => {
+            const startX = randInt(0,1); const startY = randInt(1,3);
+            const pts = [[startX,startY],[startX+2,startY],[startX+2,startY+2]];
+            return { pts, answer:[startX+4,startY+2], hint:"The pattern moves 2 right, then 2 up. What's next?" };
+          },
+        ];
+        const pattern = randFrom(patterns)();
+        setQ(pattern);
+        setAnswer(null);
+        setMsg("");
+      }, []);
+
+      useEffect(() => { genQ(); }, [genQ]);
+
+      const handleClick = (coord) => {
+        if (answer) return;
+        setAnswer(coord);
+        if (coord[0]===q.answer[0] && coord[1]===q.answer[1]) {
+          playSound("correct");
+          setMsg(randFrom(ENCOURAGEMENTS));
+          setScore(s => s + 1);
+          addStars(2);
+          setConfetti(c => c + 1);
+        } else {
+          playSound("wrong");
+          setMsg(`${randFrom(WRONG_MSGS)} Answer: (${q.answer[0]}, ${q.answer[1]})`);
+        }
+      };
+
+      const next = () => {
+        if (round + 1 >= totalRounds) { setQ(null); return; }
+        setRound(r => r + 1);
+        genQ();
+      };
+
+      if (!q) {
+        if (round > 0) return <div style={{textAlign:"center",padding:32}}>
+          <Confetti active={confetti}/>
+          <div style={{fontSize:48}} className="bounce-in">🏆</div>
+          <h2 style={{margin:"16px 0"}}>Pattern Master!</h2>
+          <p style={{fontSize:20,marginBottom:16}}>Score: {score}/{totalRounds}</p>
+          <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+            <Btn onClick={()=>{setRound(0);setScore(0);genQ()}} color="#10b981">Play Again</Btn>
+            <Btn onClick={onBack}>Back to Menu</Btn>
+          </div>
+        </div>;
+        return null;
+      }
+
+      const points = q.pts.map((c,i) => ({coord:c, color:"#6366f1", label:String(i+1)}));
+      if (answer) {
+        const isCorrect = answer[0]===q.answer[0] && answer[1]===q.answer[1];
+        if (!isCorrect) {
+          points.push({coord:answer, color:"#ef4444", label:"✗"});
+          points.push({coord:q.answer, color:"#10b981", label:"✓"});
+        } else {
+          points.push({coord:q.answer, color:"#10b981", label:"✓"});
+        }
+      }
+      const shapes = [{points: q.pts, closed:false, color:"#6366f1"}];
+
+      return (
+        <div style={{textAlign:"center",padding:16}} className="fade-slide">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <Btn onClick={onBack} color="#64748b">← Back</Btn>
+            <span style={{fontWeight:700,color:"#6366f1"}}>⭐ {score}/{totalRounds}</span>
+            <span style={{fontSize:13,color:"#64748b"}}>Round {round+1}/{totalRounds}</span>
+          </div>
+          <h3 style={{marginBottom:4,color:"#1e293b"}}>🔮 Find the Pattern!</h3>
+          <p style={{fontSize:13,color:"#64748b",marginBottom:4}}>{q.hint}</p>
+          <p style={{fontSize:12,color:"#8b5cf6",marginBottom:8}}>Points so far: {q.pts.map(c=>`(${c[0]},${c[1]})`).join(" → ")} → ?</p>
+          <Confetti active={confetti}/>
+          <CoordGrid
+            size={300}
+            range={6}
+            points={points}
+            shapes={shapes}
+            onClick={handleClick}
+          />
+          {msg && <p className="bounce-in" style={{fontSize:16,fontWeight:700,margin:"12px 0",color:answer && answer[0]===q.answer[0] && answer[1]===q.answer[1]?"#10b981":"#f59e0b"}}>{msg}</p>}
+          {answer && <Btn onClick={next} color="#6366f1" big style={{marginTop:8}}>Next →</Btn>}
+        </div>
+      );
+    }
+
+    // ─── MAIN APP ───────────────────────────────────────────────
+    function App() {
+      const [stars, addStars] = useStars();
+      const [screen, setScreen] = useState("menu");
+      const [level, setLevel] = useState(1);
+
+      const modes = [
+        { id:"read", title:"📍 Read Coordinates", desc:"Identify coordinates of points on the grid", color:"#6366f1", icon:"📍" },
+        { id:"plot", title:"🎯 Plot Coordinates", desc:"Click to place points at given coordinates", color:"#ec4899", icon:"🎯" },
+        { id:"build2d", title:"🔷 Shape Builder", desc:"Build 2D shapes by plotting vertices", color:"#10b981", icon:"🔷" },
+        { id:"nets", title:"📦 3D Shape Nets", desc:"Learn nets, faces, edges & vertices of 3D shapes", color:"#f59e0b", icon:"📦" },
+        { id:"translate", title:"🔄 Translate & Reflect", desc:"Move and flip points on the grid", color:"#8b5cf6", icon:"🔄" },
+        { id:"patterns", title:"🔮 Coordinate Patterns", desc:"Spot the pattern and find the next point", color:"#06b6d4", icon:"🔮" },
+      ];
+
+      if (screen === "menu") {
+        return (
+          <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#eef2ff 0%,#e0e7ff 50%,#c7d2fe 100%)",padding:"24px 16px"}}>
+            <div style={{maxWidth:420,margin:"0 auto",textAlign:"center"}}>
+              <div style={{fontSize:48,marginBottom:8}} className="float">📐</div>
+              <h1 style={{fontSize:28,fontWeight:800,color:"#1e1b4b",marginBottom:4}}>Coordinates & Shape Builder!</h1>
+              <p style={{color:"#6366f1",fontWeight:600,marginBottom:4}}>⭐ {stars} stars earned</p>
+              <p style={{color:"#64748b",fontSize:13,marginBottom:20}}>Year 5 — Plot points, build shapes & explore 3D nets</p>
+
+              <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:20}}>
+                <Btn onClick={()=>setLevel(1)} color={level===1?"#6366f1":"#94a3b8"} active={level===1}>Level 1 (First Quadrant)</Btn>
+                <Btn onClick={()=>setLevel(2)} color={level===2?"#8b5cf6":"#94a3b8"} active={level===2}>Level 2 (All Quadrants)</Btn>
+              </div>
+
+              <div style={{display:"grid",gap:12}}>
+                {modes.map(m => (
+                  <button key={m.id} onClick={()=>{playSound("click");setScreen(m.id);}} style={{
+                    display:"flex",alignItems:"center",gap:14,padding:"16px 20px",
+                    background:"#fff",borderRadius:14,border:"none",cursor:"pointer",
+                    boxShadow:"0 2px 12px rgba(0,0,0,0.06)",transition:"all 0.2s",textAlign:"left",width:"100%"
+                  }}
+                  onMouseOver={e=>e.currentTarget.style.transform="translateY(-2px)"}
+                  onMouseOut={e=>e.currentTarget.style.transform="translateY(0)"}
+                  >
+                    <div style={{fontSize:32,width:48,height:48,display:"flex",alignItems:"center",justifyContent:"center",background:`${m.color}15`,borderRadius:12}}>{m.icon}</div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{m.title}</div>
+                      <div style={{fontSize:12,color:"#64748b"}}>{m.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{marginTop:24,padding:16,background:"rgba(255,255,255,0.7)",borderRadius:12}}>
+                <p style={{fontSize:12,color:"#64748b",lineHeight:1.5}}>
+                  💡 <strong>Remember:</strong> Coordinates are written as (x, y) — go along the x-axis first (the corridor), then up the y-axis (the stairs)!
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const goBack = () => setScreen("menu");
+
+      return (
+        <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#eef2ff 0%,#e0e7ff 50%,#c7d2fe 100%)",padding:"16px"}}>
+          <div style={{maxWidth:420,margin:"0 auto"}}>
+            {screen==="read" && <ReadCoordinates onBack={goBack} addStars={addStars} level={level}/>}
+            {screen==="plot" && <PlotCoordinates onBack={goBack} addStars={addStars} level={level}/>}
+            {screen==="build2d" && <ShapeBuilder2D onBack={goBack} addStars={addStars}/>}
+            {screen==="nets" && <ShapeNets onBack={goBack} addStars={addStars}/>}
+            {screen==="translate" && <TranslateReflect onBack={goBack} addStars={addStars}/>}
+            {screen==="patterns" && <CoordPatterns onBack={goBack} addStars={addStars}/>}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
